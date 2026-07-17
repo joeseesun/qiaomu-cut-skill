@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-label="qiaomu-cut architecture diagram">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="0.55" stop-color="#1f2937"/>
+      <stop offset="1" stop-color="#3b0764"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="620" rx="34" fill="url(#bg)"/>
+  <circle cx="1040" cy="120" r="180" fill="#a855f7" opacity="0.18"/>
+  <circle cx="120" cy="540" r="220" fill="#38bdf8" opacity="0.14"/>
+  <text x="64" y="86" fill="#fff" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="42" font-weight="800">qiaomu-cut</text>
+  <text x="64" y="124" fill="#c4b5fd" font-family="Inter, SF Pro Text, Arial, sans-serif" font-size="20">Agent-native cinematic video director</text>
+
+  <g filter="url(#shadow)">
+    <rect x="64" y="176" width="210" height="250" rx="24" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.18"/>
+    <text x="94" y="222" fill="#fff" font-size="24" font-weight="700" font-family="Inter, Arial">Sources</text>
+    <text x="94" y="266" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">33台词</text>
+    <text x="94" y="302" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">ClipSeek</text>
+    <text x="94" y="338" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">Local files</text>
+    <text x="94" y="374" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">AI images</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="342" y="146" width="250" height="310" rx="28" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.2"/>
+    <text x="382" y="198" fill="#fff" font-size="26" font-weight="800" font-family="Inter, Arial">QiaoCut IR</text>
+    <text x="382" y="244" fill="#ddd6fe" font-size="18" font-family="Inter, Arial">brief → scenes</text>
+    <text x="382" y="280" fill="#ddd6fe" font-size="18" font-family="Inter, Arial">shots → motion</text>
+    <text x="382" y="316" fill="#ddd6fe" font-size="18" font-family="Inter, Arial">assets → license</text>
+    <text x="382" y="352" fill="#ddd6fe" font-size="18" font-family="Inter, Arial">render → verify</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="660" y="176" width="220" height="250" rx="24" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.18"/>
+    <text x="696" y="222" fill="#fff" font-size="24" font-weight="700" font-family="Inter, Arial">Renderers</text>
+    <text x="696" y="266" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">ffmpeg-full</text>
+    <text x="696" y="302" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">HTML / Motion</text>
+    <text x="696" y="338" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">Manim</text>
+    <text x="696" y="374" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">Composite</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="948" y="176" width="188" height="250" rx="24" fill="url(#card)" stroke="#ffffff" stroke-opacity="0.18"/>
+    <text x="982" y="222" fill="#fff" font-size="24" font-weight="700" font-family="Inter, Arial">Output</text>
+    <text x="982" y="266" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">final.mp4</text>
+    <text x="982" y="302" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">manifest</text>
+    <text x="982" y="338" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">license</text>
+    <text x="982" y="374" fill="#e5e7eb" font-size="18" font-family="Inter, Arial">quality</text>
+  </g>
+
+  <path d="M286 302 C312 302 316 302 336 302" stroke="#c4b5fd" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M602 302 C628 302 632 302 652 302" stroke="#c4b5fd" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M890 302 C916 302 920 302 940 302" stroke="#c4b5fd" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <text x="64" y="536" fill="#f8fafc" font-size="22" font-family="Inter, Arial">Search · Generate · Direct · Render · Verify</text>
+  <text x="64" y="572" fill="#cbd5e1" font-size="16" font-family="Inter, Arial">Designed for cinematic cuts, explainers, social shorts, English learning, product launches, and source-aware open media workflows.</text>
+</svg>

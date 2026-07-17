@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "total": 11,
+  "failures": [],
+  "results": [
+    {
+      "id": "english_movie_mix",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "stock_excavator",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "person_profile",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "explainer",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "product_launch",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "talking_head",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "mask_effect",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "only_article",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "only_image",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "ffmpeg_question",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "translation_only",
+      "expected": false,
+      "got": false
+    }
+  ]
+}

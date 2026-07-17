@@ -1,0 +1,126 @@
+name: qiaomu-cut
+version: 0.2.0
+mode: governed
+summary: 一句话生成专业视频的乔木智能剪辑导演
+owner:
+  name: 向阳乔木
+  x: https://x.com/vista8
+  github: https://github.com/joeseesun/
+
+intents:
+  - id: create_video
+    description: 从自然语言 brief 规划、采集、生成、剪辑和验证视频
+    examples:
+      - 给我做一个 60 秒挖掘机英语启蒙视频
+      - 搜几段电影里骂人的台词，混剪成英语学习视频
+      - 介绍乔布斯，做一个电影感人物短片
+      - 把这段口播剪成小红书风格短视频
+  - id: source_media
+    description: 搜索或整理视频、照片、插画、影视台词、本地文件和 AI 生成素材
+  - id: plan_video
+    description: 生成 QiaoCut IR、分镜、镜头语言、转场和渲染计划
+  - id: verify_video
+    description: 检查输出视频编码、时长、分辨率、音频和来源记录
+
+inputs:
+  brief:
+    type: string
+    required: true
+    description: 用户的一句话视频需求
+  workflow:
+    type: enum
+    required: false
+    values:
+      - english-mix
+      - stock-story
+      - person-profile
+      - explainer
+      - cinematic-short
+      - product-launch
+      - social-short
+      - talking-head
+      - data-story
+      - hybrid-studio
+  assets:
+    type: array
+    required: false
+    description: 本地文件、URL、素材候选或已下载素材
+  output:
+    type: object
+    required: false
+    properties:
+      aspect: "9:16 | 16:9 | 1:1 | 21:9"
+      durationSeconds: number
+      platform: "douyin | xiaohongshu | tiktok | youtube | course | custom"
+
+outputs:
+  - qiaocut-ir.json
+  - assets-manifest.json
+  - license-report.md
+  - quality-report.json
+  - final.mp4
+
+commands:
+  doctor:
+    run: node scripts/qcut.js doctor --json
+    description: 检查 ffmpeg-full、33tc、ClipSeek、本地工具能力
+  clipseek:
+    run: node scripts/qcut.js clipseek "挖掘机" --type video --json
+    description: 搜索 ClipSeek 免费素材候选
+  plan:
+    run: node scripts/qcut.js plan "做一个挖掘机英语启蒙视频" --json
+    description: 生成 QiaoCut IR 草案
+  verify:
+    run: node scripts/qcut.js verify /path/to/video.mp4 --json
+    description: 验证视频文件
+  render:
+    run: node scripts/qcut.js render /path/to/project --json
+    description: 渲染 qiaocut.timeline.v1；默认不覆盖已有输出，覆盖需显式 --force
+  33tc:
+    run: node scripts/qcut.js 33tc search "台词" --json
+    description: 委托独立安装且获授权的 33tc CLI；pick/cut 可能耗积分，必须显式确认
+  scaffold:
+    run: node scripts/qcut.js scaffold ./qiaocut-project --brief "做一个 60 秒挖掘机英语启蒙视频" --json
+    description: 创建视频项目目录、IR、素材 manifest 和授权报告
+  ass:
+    run: node scripts/qcut.js ass captions.json --output subtitles.ass
+    description: 把 caption JSON 转成 ASS 字幕
+  html_scene:
+    run: node scripts/qcut.js html-scene qiaocut-ir.json --scene s01 --output scenes/s01.html
+    description: 把 IR scene 转成可捕获的 HTML 视觉场景
+  license:
+    run: node scripts/qcut.js license assets-manifest.json --output license-report.md
+    description: 生成素材授权报告
+  bootstrap_macos:
+    run: scripts/bootstrap_macos.sh --check
+    description: 检查或安装 ffmpeg-full
+
+trust_boundary:
+  reads:
+    - local media files explicitly provided by the user
+    - local 33TaiCi login state through an independently installed 33tc adapter; token values must not be printed
+    - public ClipSeek/Pexels/Pixabay-style source pages
+  writes:
+    - project output directory chosen by user or agent
+    - generated reports and manifests
+  network:
+    - public media discovery and cited information sources
+    - 33TaiCi service calls made by the external adapter when the user invokes qcut 33tc
+  avoids:
+    - deleting original media
+    - printing secrets, cookies, tokens, or private account data
+    - claiming provider license without source-page evidence
+    - redistributing 33TaiCi private protocols as part of this public skill
+
+release_gate:
+  required:
+    - validate_skill.py
+    - trigger_eval.py
+    - qcut doctor
+    - README review
+    - secret scan before GitHub publish
+  missing_evidence:
+    - end-to-end render fixtures for every workflow
+    - provider-backed download adapters beyond ClipSeek discovery
+    - human-reviewed public release
+    - an official public 33TaiCi API or redistribution permission for a bundled zero-install adapter

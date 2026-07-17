@@ -1,0 +1,100 @@
+{
+  "name": "qiaomu-cut",
+  "version": "0.2.0",
+  "mode": "Governed",
+  "owner": {
+    "name": "向阳乔木",
+    "x": "https://x.com/vista8",
+    "github": "https://github.com/joeseesun/"
+  },
+  "intent": {
+    "recurringJob": "Turn one-sentence video requests into source-aware, renderer-ready, quality-checked video projects.",
+    "targetUsers": [
+      "Qiaomu/Codex users creating professional videos",
+      "Creators making English-learning, explainer, person-profile, product, or social videos",
+      "Agents that need a reusable video production workflow"
+    ],
+    "finishedOutputs": [
+      "QiaoCut IR",
+      "asset manifest",
+      "license report",
+      "quality report",
+      "final video when rendering is executed"
+    ]
+  },
+  "skillIR": {
+    "layers": [
+      "brief understanding",
+      "workflow routing",
+      "source adapters",
+      "shot and motion design",
+      "renderer selection",
+      "quality gates",
+      "delivery reports"
+    ],
+    "coreCommands": [
+      "qcut doctor",
+      "qcut clipseek",
+      "qcut local",
+      "qcut plan",
+      "qcut workflow",
+      "qcut render",
+      "qcut 33tc",
+      "qcut verify"
+    ],
+    "workflows": [
+      "english-mix",
+      "stock-story",
+      "person-profile",
+      "explainer",
+      "cinematic-short",
+      "product-launch",
+      "social-short",
+      "talking-head",
+      "data-story",
+      "hybrid-studio"
+    ]
+  },
+  "trust": {
+    "readsLocalAccountState": "only through an independently installed 33tc adapter when invoked",
+    "printsSecrets": false,
+    "networkAccess": "public media discovery and cited information sources",
+    "writes": "generated project outputs and reports only; no-clobber by default, explicit --force for replacement",
+    "destructiveActions": "not allowed",
+    "rollbackBoundary": "delete generated project directory; uninstall dependency via package manager if desired"
+  },
+  "evidence": {
+    "implemented": [
+      "SKILL.md routing and runtime instructions",
+      "GitHub-ready README",
+      "agents/interface.yaml",
+      "ClipSeek read-only search adapter",
+      "local asset scanner",
+      "33tc presence detector",
+      "ffmpeg-full doctor",
+      "QiaoCut IR plan generator",
+      "video ffprobe verifier",
+      "qiaocut.timeline.v1 renderer with bilingual ASS, deterministic score, macOS narration, ducking, two-pass loudness, contact sheet, strict path boundary, and technical verification",
+      "external 33tc adapter delegation without bundled private protocol",
+      "trigger eval script",
+      "skill validation script"
+    ],
+    "missingEvidence": [
+      "end-to-end render fixtures for every workflow (one 60-second bilingual hybrid demo and one 2-second smoke fixture exist)",
+      "provider-backed Pexels/Pixabay direct download adapters",
+      "HTML/Motion/Manim renderer implementations beyond design contract",
+      "public GitHub install proof before publishing",
+      "official public 33TaiCi API or permission for a bundled zero-install adapter",
+      "clean-host Linux and Windows render evidence"
+    ]
+  },
+  "releaseGate": {
+    "requiredBeforePublish": [
+      "python3 scripts/validate_skill.py .",
+      "python3 scripts/trigger_eval.py . --cases evals/trigger_cases.json --output reports/trigger-eval.json",
+      "node scripts/qcut.js doctor --json",
+      "secret scan",
+      "skill-publisher dry run"
+    ]
+  }
+}
