@@ -155,6 +155,22 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+function sha256File(file) {
+  const hash = crypto.createHash('sha256');
+  const descriptor = fs.openSync(file, 'r');
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    let bytes;
+    do {
+      bytes = fs.readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytes) hash.update(buffer.subarray(0, bytes));
+    } while (bytes);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  return hash.digest('hex');
+}
+
 function temporarySibling(file) {
   const extension = path.extname(file);
   const stem = path.basename(file, extension);
@@ -429,6 +445,35 @@ function validateTimeline(timeline, projectRoot, options = {}) {
   if (timeline.captionSource) projectPath(projectRoot, timeline.captionSource, 'captionSource', { exists: true });
   if (timeline.captions) projectPath(projectRoot, timeline.captions, 'captions');
   if (typeof timeline.narration === 'string') projectPath(projectRoot, timeline.narration, 'narration', { exists: true });
+  const narration = narrationSpec(timeline, projectRoot);
+  if (narration && !['file', 'macos-say', 'none'].includes(narration.engine)) {
+    throw new Error(`Unsupported narration engine: ${narration.engine || '(missing)'}`);
+  }
+  if (narration && narration.engine === 'file') {
+    if (!narration.path || typeof narration.path !== 'string') {
+      throw new Error('narration.engine file requires a project-relative path.');
+    }
+    projectPath(projectRoot, narration.path, 'narration.path', { exists: true });
+    for (const [field, minimum, exclusive, maximum] of [
+      ['start', 0, false, duration],
+      ['trim', 0, false, null],
+      ['duration', 0, true, null],
+      ['gain', 0, false, 4]
+    ]) {
+      if (narration[field] == null) continue;
+      const value = Number(narration[field]);
+      const below = !Number.isFinite(value) || (exclusive ? value <= minimum : value < minimum);
+      const above = maximum != null && value > maximum;
+      if (below || above || (field === 'start' && value >= duration)) {
+        throw new Error(`narration.${field} is outside the supported timeline range.`);
+      }
+    }
+  }
+  if (narration && narration.engine === 'macos-say') {
+    if (!Array.isArray(narration.cues) || narration.cues.length === 0) {
+      throw new Error('narration.engine macos-say requires at least one cue.');
+    }
+  }
   if (typeof timeline.music === 'string') projectPath(projectRoot, timeline.music, 'music');
   if (timeline.music && typeof timeline.music === 'object' && timeline.music.path) {
     projectPath(projectRoot, timeline.music.path, 'music.path');
@@ -451,6 +496,10 @@ function collectProjectIO(timeline, projectRoot, timelineFile) {
   }
   if (typeof timeline.narration === 'string') {
     reads.push({ label: 'narration', file: projectPath(projectRoot, timeline.narration, 'narration', { exists: true }) });
+  }
+  const narration = narrationSpec(timeline, projectRoot);
+  if (narration && narration.engine === 'file') {
+    reads.push({ label: 'narration.path', file: projectPath(projectRoot, narration.path, 'narration.path', { exists: true }) });
   }
   if (typeof timeline.music === 'string') {
     reads.push({ label: 'music', file: projectPath(projectRoot, timeline.music, 'music', { exists: true }) });
@@ -803,10 +852,120 @@ function narrationCacheKey(context, spec, cue, start) {
   return crypto.createHash('sha256').update(stableStringify(payload)).digest('hex');
 }
 
+function verifiedFileNarrationProvenance(projectRoot, spec, source) {
+  const declaredProvenance = Boolean(
+    spec.provider || spec.assetId || spec.speakerId || spec.speakerName || spec.narrationTextSha256
+  );
+  const manifestFile = projectPath(projectRoot, 'assets-manifest.json', 'asset manifest');
+  if (!fs.existsSync(manifestFile)) {
+    if (declaredProvenance) throw new Error('File narration provenance requires assets-manifest.json.');
+    return null;
+  }
+  const manifest = readJson(manifestFile);
+  if (!manifest || !Array.isArray(manifest.assets)) throw new Error('assets-manifest.json must contain { assets: [] }.');
+  const asset = manifest.assets.find((candidate) => (
+    spec.assetId ? candidate.id === spec.assetId : candidate.localPath === spec.path
+  ));
+  if (!asset) {
+    if (declaredProvenance) throw new Error('File narration provenance does not match an asset manifest record.');
+    return null;
+  }
+  if (asset.provider === 'listenhub') {
+    for (const field of ['assetId', 'speakerId', 'speakerName', 'narrationTextSha256']) {
+      if (!spec[field]) throw new Error(`ListenHub file narration requires ${field} provenance.`);
+    }
+  }
+  if (spec.assetId && asset.id !== spec.assetId) throw new Error('File narration assetId does not match the asset manifest record.');
+  if (asset.localPath !== spec.path) throw new Error('File narration assetId does not match narration.path.');
+  if (asset.mediaType !== 'audio') throw new Error('File narration manifest record must be an audio asset.');
+  if (spec.provider && asset.provider !== spec.provider) throw new Error('File narration provider does not match the asset manifest.');
+  if (asset.provider === 'listenhub') {
+    if (!/^[a-f0-9]{64}$/.test(String(asset.sha256 || ''))) {
+      throw new Error('ListenHub file narration manifest record requires a valid SHA-256 digest.');
+    }
+    if (sha256File(source) !== asset.sha256) {
+      throw new Error('ListenHub file narration content SHA-256 does not match the asset manifest.');
+    }
+  }
+  const runs = Array.isArray(asset.provenanceRuns) && asset.provenanceRuns.length
+    ? asset.provenanceRuns
+    : asset.provenance
+      ? [asset.provenance]
+      : [];
+  const matchingRun = runs.find((run) => {
+    const identityMatches = (
+      (!spec.speakerId || run.speakerId === spec.speakerId)
+      && (!spec.speakerName || run.speakerName === spec.speakerName)
+      && (!spec.narrationTextSha256 || run.narrationTextSha256 === spec.narrationTextSha256)
+    );
+    if (!identityMatches || asset.provider !== 'listenhub') return identityMatches;
+    return /^[a-f0-9]{64}$/.test(String(run.speakerCatalogSha256 || ''))
+      && /^[a-f0-9]{64}$/.test(String(run.captureSha256 || ''))
+      && /^\.qiaocut\/jobs\/listenhub\/.+\.json$/.test(String(run.capturePath || ''));
+  });
+  if ((spec.speakerId || spec.speakerName || spec.narrationTextSha256) && !matchingRun) {
+    throw new Error('File narration speaker/text/catalog/capture provenance does not match the asset manifest.');
+  }
+  return {
+    provider: asset.provider,
+    assetId: asset.id,
+    speakerId: spec.speakerId || (matchingRun && matchingRun.speakerId) || null,
+    speakerName: spec.speakerName || (matchingRun && matchingRun.speakerName) || null,
+    narrationTextSha256: spec.narrationTextSha256 || (matchingRun && matchingRun.narrationTextSha256) || null,
+    speakerCatalogSha256: (matchingRun && matchingRun.speakerCatalogSha256) || null,
+    capturePath: (matchingRun && matchingRun.capturePath) || null,
+    captureSha256: (matchingRun && matchingRun.captureSha256) || null
+  };
+}
+
 function prepareNarration(context) {
   const { timeline, projectRoot, buildDir, tools, progress, ttsCacheRoot, cacheStats } = context;
   const spec = narrationSpec(timeline, projectRoot);
   if (!spec || spec.engine === 'none') return null;
+  if (spec.engine === 'file') {
+    if (!spec.path || typeof spec.path !== 'string') throw new Error('narration.engine file requires path.');
+    const source = projectPath(projectRoot, spec.path, 'narration.path', { exists: true });
+    const provenance = verifiedFileNarrationProvenance(projectRoot, spec, source);
+    const sourceDuration = durationOf(source, tools.ffprobe);
+    const trim = clamp(finite(spec.trim, 0), 0, Math.max(0, sourceDuration));
+    const start = clamp(finite(spec.start, 0), 0, timeline.output.duration);
+    if (!Number.isFinite(sourceDuration) || sourceDuration <= trim + 0.01) {
+      throw new Error('File narration has no playable audio after trim.');
+    }
+    if (start >= timeline.output.duration) throw new Error('File narration start must be before output.duration.');
+    const available = sourceDuration - trim;
+    const duration = Math.min(
+      clamp(finite(spec.duration, available), 0.01, available),
+      timeline.output.duration - start
+    );
+    const output = path.join(buildDir, 'narration-file.wav');
+    const delay = Math.round(start * 1000);
+    progress('normalizing project file narration');
+    run(tools.ffmpeg, [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-i', source,
+      '-af', [
+        `atrim=start=${trim}:duration=${duration}`,
+        'asetpts=PTS-STARTPTS',
+        'aresample=48000',
+        'aformat=sample_fmts=fltp:channel_layouts=stereo',
+        `volume=${clamp(finite(spec.gain, 1), 0, 4)}`,
+        `adelay=${delay}:all=1`,
+        'apad',
+        `atrim=0:${timeline.output.duration}`,
+        'alimiter=limit=0.94'
+      ].join(','),
+      '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2',
+      output
+    ], { cwd: projectRoot });
+    return {
+      file: output,
+      engine: 'file',
+      cues: 1,
+      voice: spec.speakerName || spec.voice || null,
+      provenance
+    };
+  }
   if (spec.engine !== 'macos-say') throw new Error(`Unsupported narration engine: ${spec.engine}`);
   if (process.platform !== 'darwin' || !fs.existsSync('/usr/bin/say')) {
     throw new Error('narration.engine macos-say requires macOS /usr/bin/say. Supply recorded narration or disable narration on this platform.');
@@ -895,7 +1054,7 @@ function prepareNarration(context) {
     narration
   );
   run(tools.ffmpeg, args, { cwd: projectRoot });
-  return { file: narration, engine: spec.engine, cues: normalized.length, voice: spec.voice || null };
+  return { file: narration, engine: spec.engine, cues: normalized.length, voice: spec.voice || null, provenance: null };
 }
 
 function shotStarts(shots) {
@@ -1506,7 +1665,12 @@ function renderProject(projectDir, options = {}) {
         family: context.resolvedCaptionFont.family,
         source: context.resolvedCaptionFont.source
       } : null,
-      narration: narration ? { engine: narration.engine, cues: narration.cues, voice: narration.voice } : null,
+      narration: narration ? {
+        engine: narration.engine,
+        cues: narration.cues,
+        voice: narration.voice,
+        provenance: narration.provenance
+      } : null,
       music: music ? { mode: music.mode, file: path.relative(projectRoot, music.file), bpm: music.bpm || null, seed: music.seed || null } : null,
       loudness: {
         targetLufs: normalized.targetLufs,
@@ -1647,6 +1811,7 @@ module.exports = {
   preflightProjectIO,
   projectPath,
   renderProject,
+  verifiedFileNarrationProvenance,
   validateTimeline
 };
 

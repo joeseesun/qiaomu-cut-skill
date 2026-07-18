@@ -45,6 +45,7 @@ function makeLicenseReport(assets, options = {}) {
   lines.push('- ClipSeek is treated as discovery only; verify licenses on provider source pages.');
   lines.push('- User-provided local files remain the user’s responsibility.');
   lines.push('- AI-generated assets must be marked as `ai_generated`.');
+  lines.push('- AI-generated does not prove commercial rights; keep provider terms as `provider_terms_unverified` until reviewed.');
   return lines.join('\n') + '\n';
 }
 

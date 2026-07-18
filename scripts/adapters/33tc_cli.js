@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { sanitizeOutput } = require('./listenhub');
 
 function executable(file) {
   if (!file) return null;
@@ -33,6 +34,11 @@ function resolveAdapter() {
 }
 
 function main(argv = process.argv.slice(2)) {
+  const command = String(argv[0] || '').toLowerCase();
+  if (['pick', 'cut'].includes(command) && !argv.includes('--yes')) {
+    process.stderr.write(`33tc ${command} may create a remote task or consume credits. Review the selection and re-run with a bare --yes.\n`);
+    return 1;
+  }
   const adapter = resolveAdapter();
   if (!adapter) {
     process.stderr.write(
@@ -41,11 +47,17 @@ function main(argv = process.argv.slice(2)) {
     );
     return 1;
   }
-  const result = spawnSync(adapter, argv, { stdio: 'inherit' });
+  const result = spawnSync(adapter, argv, {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['inherit', 'pipe', 'pipe']
+  });
   if (result.error) {
     process.stderr.write(`${result.error.message}\n`);
     return 1;
   }
+  if (result.stdout) process.stdout.write(sanitizeOutput(result.stdout, { urls: 'display' }));
+  if (result.stderr) process.stderr.write(sanitizeOutput(result.stderr, { urls: 'display' }));
   return result.status == null ? 1 : result.status;
 }
 

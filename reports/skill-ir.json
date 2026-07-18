@@ -1,6 +1,6 @@
 {
   "name": "qiaomu-cut",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "mode": "Governed",
   "owner": {
     "name": "向阳乔木",
@@ -27,6 +27,10 @@
       "brief understanding",
       "workflow routing",
       "source adapters",
+      "governed remote generation and local ASR",
+      "private provider task capture and verified asset ingestion",
+      "ListenHub-first Chinese narration with exact 向阳乔木 speaker resolution",
+      "content-derived image visual bible and continuity gate",
       "shot and motion design",
       "renderer selection",
       "profile-based preview and mastering",
@@ -42,6 +46,9 @@
       "qcut workflow",
       "qcut render",
       "qcut 33tc",
+      "qcut listenhub",
+      "qcut fetch",
+      "qcut ingest",
       "qcut verify"
     ],
     "workflows": [
@@ -55,7 +62,18 @@
       "talking-head",
       "data-story",
       "hybrid-studio"
-    ]
+    ],
+    "defaultGeneration": {
+      "narration": {
+        "providerPriority": ["listenhub", "project-file", "macos-say-preview"],
+        "preferredVoiceName": "向阳乔木",
+        "speakerResolution": "exact current speaker-list match; no silent substitution"
+      },
+      "images": {
+        "styleStrategy": "derive from subject, audience, era, emotion, platform, and medium",
+        "continuity": "lock subject identity, palette, lighting, lens/composition, texture, and typography in a visual bible"
+      }
+    }
   },
   "performanceWorkflow": {
     "defaultCliProfile": "final",
@@ -130,12 +148,15 @@
     }
   },
   "trust": {
-    "readsLocalAccountState": "only through an independently installed 33tc adapter when invoked",
+    "readsLocalAccountState": "only through independently installed 33tc and ListenHub adapters when invoked; qcut redacts structured credential fields/URLs and external adapters must not emit unlabelled raw credentials",
     "printsSecrets": false,
-    "networkAccess": "public media discovery and cited information sources",
+    "networkAccess": "public media discovery, cited information sources, and explicitly confirmed ListenHub remote operations",
     "writes": "generated project outputs and reports only; no-clobber by default, explicit --force for replacement",
     "destructiveActions": "not allowed",
-    "rollbackBoundary": "delete generated project directory; uninstall dependency via package manager if desired"
+    "credentialBoundary": "LISTENHUB_API_KEY or the provider credential store only; no API-key CLI argument, logs, manifests, Git, or public task output",
+    "uploadBoundary": "local references require a distinct --allow-upload confirmation in addition to --yes",
+    "vendorBoundary": "marswaveai/skills is preserved as a reference-only locked snapshot; nested skills and cola-avatar-pack instructions are quarantined",
+    "rollbackBoundary": "delete project-private .qiaocut jobs/cache; remove unreferenced generated assets; uninstall dependency via package manager if desired"
   },
   "evidence": {
     "implemented": [
@@ -153,15 +174,28 @@
       "automatic reuse of an installed local Noto Sans CJK SC through private project cache without font redistribution",
       "measured 60-second DIG performance evidence for cold and warm preview/standard/final renders",
       "external 33tc adapter delegation without bundled private protocol",
+      "exact 78-entry marswaveai/skills snapshot with MIT license, commit/tree lock, content digest, and isolation notice",
+      "ListenHub CLI capability and authentication-state detector that never prints credentials",
+      "per-request remote-cost gate, separate local-upload gate, API-key argument rejection, and signed-URL display redaction",
+      "project-private ListenHub task capture with mode 0600",
+      "HTTPS generated-asset downloader with private-address blocking, redirect/size/type/signature checks, atomic hard-link placement, and no-clobber",
+      "SHA-256 generated-asset ingest and manifest provenance",
+      "Coli local ASR route",
+      "file-backed narration engine for downloaded TTS/Voice/Podcast audio",
+      "182-assertion dynamically counted mock ListenHub security and integration smoke test, including exact 向阳乔木 lossless narration, auto-ingest provenance, credential-store gates, generalized secret-flag rejection, and mixed-log/storage-URL redaction",
       "trigger eval script",
       "skill validation script"
     ],
     "missingEvidence": [
-      "end-to-end render fixtures for every workflow (one 60-second bilingual hybrid demo and one 2-second smoke fixture exist)",
+      "end-to-end render fixtures for every workflow (one 60-second bilingual hybrid demo and one 1.2-second real file-narration smoke fixture exist)",
       "provider-backed Pexels/Pixabay direct download adapters",
       "HTML/Motion/Manim renderer implementations beyond design contract",
       "public GitHub install proof before publishing",
       "official public 33TaiCi API or permission for a bundled zero-install adapter",
+      "paid ListenHub provider generation tests",
+      "provider data-retention, training-use, regional-processing, and downstream-deletion evidence",
+      "real Coli model transcription and word-alignment evidence",
+      "clean-host ListenHub/Coli install proof",
       "clean-host Linux and Windows render evidence"
     ]
   },
@@ -170,6 +204,8 @@
       "python3 scripts/validate_skill.py .",
       "python3 scripts/trigger_eval.py . --cases evals/trigger_cases.json --output reports/trigger-eval.json",
       "node scripts/qcut.js doctor --json",
+      "node scripts/listenhub_smoke.js",
+      "node scripts/verify_marswave_vendor.js",
       "final-profile fixture render with full validation and releaseReady=true",
       "secret scan",
       "skill-publisher dry run"

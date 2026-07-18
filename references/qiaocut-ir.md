@@ -24,8 +24,22 @@
     ]
   },
   "sources": {
-    "preferred": ["clipseek", "local", "imagegen"],
+    "preferred": ["clipseek", "local", "imagegen", "listenhub"],
     "licenseRule": "Record sourcePage/license/attribution for every non-local asset."
+  },
+  "generation": {
+    "narration": {
+      "providerPriority": ["listenhub", "project-file", "macos-say"],
+      "preferredVoiceName": "向阳乔木",
+      "resolutionRule": "Resolve an exact current speaker-name match; never silently substitute."
+    },
+    "images": {
+      "styleStrategy": "content-derived",
+      "visualBibleRequired": true,
+      "visualBibleId": "vb-<16-char-digest>",
+      "promptPrefix": "subject; medium; era; emotion; palette; lighting; composition",
+      "negativePrompt": ["generic stock-photo look", "style drift", "anachronisms"]
+    }
   },
   "scenes": [],
   "render": {
@@ -64,9 +78,13 @@
 | `licenseStatus` | 是 | verified、verify_at_provider、user_provided、ai_generated |
 | `attribution` | 是 | 署名或来源说明 |
 
+AI 旁白 provenance 额外记录 `speakerId`、`speakerName`、`speakerCatalogSha256`、`narrationTextSha256`、task/capture/model/credit；AI 图片记录 `visualBibleId`、实际 `prompt`、`seed`（provider 返回时）和 model。相同 SHA/provider/mediaType 只保留一个资产记录，但 `provenanceRuns` 保留重复生成任务与积分历史。
+
 ## 设计原则
 
 - IR 不是最终渲染脚本，它是导演意图和可审计计划。
 - 每个素材和事实都要能回溯。
 - 渲染器可以替换，但 IR 的 scene/asset/audio/text 语义应该稳定。
 - 缺证据时写 `missing evidence`，不要把计划伪装成已执行。
+- 新增中文讲解音频默认使用 `qcut listenhub narration`：优先 ListenHub 的“向阳乔木”显示名，只接受当前 speaker list 的唯一精确匹配，自动入库后才进入带身份与内容 SHA 校验的 `narration.engine=file`。
+- 生图风格从主题、受众、年代、情绪、平台和媒介推导为具体 visual bible ID/媒介/色板/光线/构图/prompt prefix；实际 prompt/seed/model 通过 ingest/fetch 回写，不能用与内容无关的通用风格词替代导演判断。

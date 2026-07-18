@@ -34,6 +34,21 @@
       "id": "mask_effect",
       "input": "我想做视频遮罩和文字跟随的高级剪辑",
       "reason": "video mask and advanced editing"
+    },
+    {
+      "id": "ai_generated_trailer",
+      "input": "生成三个电影感 AI 视频镜头、中文旁白和配乐，剪成 45 秒预告片",
+      "reason": "AI video, TTS, music, and final editing workflow"
+    },
+    {
+      "id": "url_to_explainer",
+      "input": "读取这个网页，提炼脚本，配音并做成两分钟知识视频",
+      "reason": "content extraction is requested as part of a video deliverable"
+    },
+    {
+      "id": "qiaomu_voice_content_style",
+      "input": "用向阳乔木的声音做中文讲解，配图要跟视频内容和年代感匹配",
+      "reason": "video narration identity and content-derived image direction"
     }
   ],
   "should_not_trigger": [
@@ -56,6 +71,16 @@
       "id": "translation_only",
       "input": "把这句英文翻译成中文：I am fine.",
       "reason": "translation only"
+    },
+    {
+      "id": "podcast_only",
+      "input": "把这篇文章变成双人播客音频，不需要视频",
+      "reason": "audio-only podcast belongs to a dedicated audio workflow"
+    },
+    {
+      "id": "listenhub_account_only",
+      "input": "帮我看看 ListenHub 账户还有多少积分",
+      "reason": "account status alone is not a video editing request"
     }
   ]
 }

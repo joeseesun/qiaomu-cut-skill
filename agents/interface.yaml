@@ -1,5 +1,5 @@
 name: qiaomu-cut
-version: 0.3.0
+version: 0.4.0
 mode: governed
 summary: 一句话生成专业视频的乔木智能剪辑导演
 owner:
@@ -16,7 +16,7 @@ intents:
       - 介绍乔布斯，做一个电影感人物短片
       - 把这段口播剪成小红书风格短视频
   - id: source_media
-    description: 搜索或整理视频、照片、插画、影视台词、本地文件和 AI 生成素材
+    description: 搜索、生成或整理视频、照片、插画、影视台词、旁白、音乐、本地文件和 AI 素材
   - id: plan_video
     description: 生成 QiaoCut IR、分镜、镜头语言、转场和渲染计划
   - id: verify_video
@@ -63,6 +63,24 @@ outputs:
   - final.standard.mp4
   - final.mp4
 
+creative_defaults:
+  narration:
+    provider_priority: ListenHub
+    preferred_speaker_name: 向阳乔木
+    speaker_resolution: 默认由 qcut listenhub narration 执行，只接受唯一、已授权的“向阳乔木”完全同名 speaker ID，并自动记录 speaker/text/catalog provenance
+    failure_policy: 找不到、歧义或未授权时不悄悄换音色；回退用户已提供的 file narration 或请求选择
+    billing_policy: 有 estimate 先 estimate；当前 OpenAPI TTS 无已验证 estimate，必须说明费用未知并为本次调用取得 --yes
+    localization: 二进制输出必须项目相对、no-clobber，生成后立即 ingest；URL 结果立即 fetch
+  generated_images:
+    style_inputs:
+      - content_theme
+      - audience
+      - era
+      - emotion
+      - medium
+    consistency: 先建立整片 visual bible，后续图像继承统一色板、镜头/构图、光线、纹理、字体/图形语言和人物约束
+    mismatch_policy: 不硬编码单一风格；提示词与主题或 visual bible 不匹配时拒绝生成并先重写/重规划
+
 commands:
   doctor:
     run: node scripts/qcut.js doctor --json
@@ -103,11 +121,35 @@ commands:
   bootstrap_macos:
     run: scripts/bootstrap_macos.sh --check
     description: 检查或安装 ffmpeg-full
+  listenhub_doctor:
+    run: node scripts/qcut.js listenhub doctor --json
+    description: 只读检查 ListenHub npm 包/CLI 协议、OpenAPI key 与 OAuth/internal 状态、图片/视频/TTS/音乐/内容解析/Voice 能力和 Coli ASR；不显示凭据
+  listenhub_generate:
+    run: node scripts/qcut.js listenhub openapi video create --prompt "shot description" --model doubao-seedance-2-pro --no-wait --json --qcut-project /path/to/project --yes
+    description: 使用 LISTENHUB_API_KEY 时委托 OpenAPI video 生成候选素材；先 estimate，远端创建必须当前明确确认，本地文件上传另需 --allow-upload
+  listenhub_poll:
+    run: node scripts/qcut.js listenhub openapi video get TASK_ID_FROM_SUBMIT --json --qcut-project /path/to/project
+    description: 用创建结果中的 task ID 只读轮询，并把结果自动捕获到项目私有 .qiaocut/jobs/listenhub/ 下
+  listenhub_narration:
+    run: node scripts/qcut.js listenhub narration --text-file scripts/narration.txt --qcut-project /path/to/project --yes --json
+    description: 默认中文讲解闭环：唯一精确匹配“向阳乔木”，执行 TTS、签名校验、自动 ingest，并返回带 speaker/text/catalog/capture provenance 的 timelineNarration；费用未知时先确认本次 --yes
+  listenhub_asr:
+    run: node scripts/qcut.js listenhub asr assets/interview.wav --model sensevoice --json --qcut-project /path/to/project
+    description: 使用 Coli 做本地全文 ASR；不把它描述为逐词字幕对齐
+  fetch_generated:
+    run: node scripts/qcut.js fetch /path/to/project --result .qiaocut/jobs/listenhub/poll-result.json --field result.imageUrl --kind image --provider listenhub --visual-bible-id vb-ID --prompt "actual prompt" --seed PROVIDER_SEED --json
+    description: 从 poll capture 安全下载生成物并写任务及 visual-bible/prompt/seed provenance，不把临时 URL 放进 timeline
+  ingest_generated:
+    run: node scripts/qcut.js ingest /path/to/project /path/to/generated.mp4 --kind video --provider listenhub --json
+    description: 导入已在本机的生成素材，SHA-256 去重、no-clobber、不改原文件
+  bootstrap_listenhub:
+    run: scripts/bootstrap_listenhub.sh --check
+    description: 严格检查或精确安装 @marswave/listenhub-cli@0.0.15（CLI 协议 0.1.0）与 @marswave/coli@0.0.20；ListenHub provider 需要 Node 20+
 
 trust_boundary:
   reads:
     - local media files explicitly provided by the user
-    - local 33TaiCi login state through an independently installed 33tc adapter; token values must not be printed
+    - local 33TaiCi login state through an independently installed 33tc adapter; qcut redacts structured credential fields/URLs and the external adapter must not emit unlabelled raw credentials
     - public ClipSeek/Pexels/Pixabay-style source pages
   writes:
     - project output directory chosen by user or agent
@@ -115,16 +157,24 @@ trust_boundary:
   network:
     - public media discovery and cited information sources
     - 33TaiCi service calls made by the external adapter when the user invokes qcut 33tc
+    - ListenHub/MarsWave remote services only after per-request confirmation; local reference uploads require a separate allow-upload gate
   avoids:
     - deleting original media
     - printing secrets, cookies, tokens, or private account data
     - claiming provider license without source-page evidence
     - redistributing 33TaiCi private protocols as part of this public skill
     - bundling, uploading, or redistributing fonts discovered on the user's machine
+    - accepting API keys as command arguments or writing them to jobs, manifests, logs, reports, or Git
+    - putting temporary signed provider URLs in public manifests or timelines
+    - writing ListenHub captures outside the project-private .qiaocut/jobs/listenhub/ directory
+    - silently substituting another voice when the exact 向阳乔木 speaker is absent, ambiguous, or unauthorized
+    - hard-coding one generated-image style regardless of the brief or generating prompts that conflict with the project visual bible
+    - executing nested vendored MarsWave skills, auto-upgrades, agent-memory persistence, or cola-avatar-pack deletion instructions
 
 performance_workflow:
   default_cli_profile: final
   skill_sequence:
+    - derive a project visual bible from theme, audience, era, emotion, and medium before generating imagery
     - render preview for content, caption, pacing, and composition iteration
     - render standard only for internal or speed-sensitive delivery
     - render final once content is locked and release evidence is required
@@ -167,3 +217,6 @@ release_gate:
     - provider-backed download adapters beyond ClipSeek discovery
     - human-reviewed public release
     - an official public 33TaiCi API or redistribution permission for a bundled zero-install adapter
+    - paid ListenHub provider generation tests
+    - provider data-retention, training-use, regional-processing, and downstream-deletion evidence
+    - clean-host ListenHub/Coli install verification outside the development Mac

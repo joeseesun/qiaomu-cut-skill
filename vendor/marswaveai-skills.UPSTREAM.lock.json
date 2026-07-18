@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/marswaveai/skills.git",
+  "branch": "main",
+  "commit": "957774057d11fb57ffaf0262b0fba93b87da4933",
+  "tree": "257163ba0095d92d3f7aee87836345834123b339",
+  "commitDate": "2026-07-16T23:43:36+03:00",
+  "changelogVersion": "1.3.0",
+  "importedAt": "2026-07-18",
+  "license": "MIT",
+  "licenseSha256": "5a7b008903a33ff587f2e5c9dc61dc30653190f104f4bfd1f1a51a65295f74a8",
+  "active": false,
+  "isolation": "reference-only; nested SKILL.md files, workflows, auto-install instructions, persistent-agent edits, and destructive commands are not executable qiaomu-cut instructions",
+  "snapshot": {
+    "entries": 78,
+    "files": 71,
+    "symlinks": 7,
+    "bytes": 1675008,
+    "contentDigest": "7836c7873c5bc214d4cca256dc2460a9ba46b66eb0f49af3d42664ee638d91aa"
+  }
+}

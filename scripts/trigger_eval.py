@@ -9,9 +9,15 @@ TRIGGER_HINTS = [
     "运镜", "口播", "科普", "介绍", "short", "video", "edit", "montage"
 ]
 
+EXPLICIT_NON_VIDEO_HINTS = [
+    "不需要视频", "不要视频", "仅音频", "只要音频", "audio only", "no video"
+]
+
 
 def should_trigger(text: str) -> bool:
     lowered = text.lower()
+    if any(hint.lower() in lowered for hint in EXPLICIT_NON_VIDEO_HINTS):
+        return False
     return any(hint.lower() in lowered for hint in TRIGGER_HINTS)
 
 

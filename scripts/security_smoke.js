@@ -26,12 +26,19 @@ function main() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qiaomu-cut-security-'));
   const project = path.join(temp, 'project');
   const outside = path.join(temp, 'outside');
+  const fake33tc = path.join(temp, '33tc-fixture');
+  const fake33tcLog = path.join(temp, '33tc-calls.jsonl');
   fs.mkdirSync(path.join(project, 'assets'), { recursive: true });
   fs.mkdirSync(outside, { recursive: true });
   const source = path.join(project, 'assets', 'source.png');
   const outsideSecret = path.join(outside, 'secret.txt');
   fs.writeFileSync(source, 'fixture');
   fs.writeFileSync(outsideSecret, 'do-not-read');
+  fs.writeFileSync(fake33tc, `#!/usr/bin/env node
+const fs = require('fs');
+fs.appendFileSync(process.env.FAKE_33TC_LOG, JSON.stringify(process.argv.slice(2)) + '\\n');
+process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-token', mediaUrl: 'https://private.example.test/file.mp4?sig=secret' }));
+`, { mode: 0o700 });
 
   try {
     mustThrow(() => projectPath(project, '../outside/secret.txt', 'escape', { exists: true }), /escapes the project/);
@@ -130,6 +137,52 @@ function main() {
     );
 
     const qcut = path.join(__dirname, 'qcut.js');
+    const qcut33tc = path.join(__dirname, 'adapters', '33tc_cli.js');
+    const fake33tcEnvironment = {
+      ...process.env,
+      QIAOMU_33TC_CLI: fake33tc,
+      FAKE_33TC_LOG: fake33tcLog
+    };
+    const unconfirmed33tc = childProcess.spawnSync(
+      process.execPath,
+      [qcut33tc, 'pick', 'clip-fixture'],
+      { encoding: 'utf8', env: fake33tcEnvironment }
+    );
+    assert.equal(unconfirmed33tc.status, 1);
+    assert.equal(fs.existsSync(fake33tcLog), false);
+    const falseConfirmed33tc = childProcess.spawnSync(
+      process.execPath,
+      [qcut33tc, 'cut', 'clip-fixture', '--yes=false'],
+      { encoding: 'utf8', env: fake33tcEnvironment }
+    );
+    assert.equal(falseConfirmed33tc.status, 1);
+    assert.equal(fs.existsSync(fake33tcLog), false);
+    const confirmed33tc = childProcess.spawnSync(
+      process.execPath,
+      [qcut33tc, 'pick', 'clip-fixture', '--yes'],
+      { encoding: 'utf8', env: fake33tcEnvironment }
+    );
+    assert.equal(confirmed33tc.status, 0);
+    assert(!confirmed33tc.stdout.includes('opaque-33tc-token'));
+    assert(confirmed33tc.stdout.includes('clip-fixture'));
+    assert.equal(fs.existsSync(fake33tcLog), true);
+    const planned = childProcess.spawnSync(
+      process.execPath,
+      [qcut, 'plan', '做一个唐代李白水墨人物中文讲解视频，忧郁但有希望', '--json'],
+      { encoding: 'utf8' }
+    );
+    assert.equal(planned.status, 0);
+    const plannedIr = JSON.parse(planned.stdout);
+    assert.equal(plannedIr.generation.narration.providerPriority[0], 'listenhub');
+    assert.equal(plannedIr.generation.narration.preferredVoiceName, '向阳乔木');
+    assert.equal(plannedIr.style.visualBible.strategy, 'content-derived');
+    assert.match(plannedIr.style.visualBible.medium, /ink-wash/);
+    assert.match(plannedIr.style.visualBible.era, /Tang-dynasty/);
+    assert.match(plannedIr.style.visualBible.emotion, /melancholic but hopeful/);
+    assert(plannedIr.style.visualBible.palette.includes('one restrained warm amber accent'));
+    assert.match(plannedIr.style.visualBible.id, /^vb-[a-f0-9]{16}$/);
+    assert.equal(plannedIr.generation.images.visualBibleRequired, true);
+    assert.equal(plannedIr.generation.images.visualBibleId, plannedIr.style.visualBible.id);
     const booleanBeforeProject = childProcess.spawnSync(
       process.execPath,
       [qcut, 'render', '--no-cache', path.join(temp, 'missing-project')],
@@ -166,7 +219,7 @@ function main() {
     assert(!ass.includes('\nDialogue: injected'));
     assert(ass.includes('\\c&H0042B9F4&'));
 
-    process.stdout.write(`${JSON.stringify({ ok: true, checks: 18 }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ ok: true, checks: 37 }, null, 2)}\n`);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

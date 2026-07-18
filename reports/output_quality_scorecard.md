@@ -1,4 +1,4 @@
-# Output Quality Scorecard — v0.3.0
+# Output Quality Scorecard — v0.4.0
 
 用于每个真实视频项目完成前的人工/自动检查。`preview` 通过只代表可以继续迭代；公开发布必须以 `final + full`、字幕字体已验证且 `releaseReady: true` 为技术门，再补齐人工审看与素材权利证据。
 
@@ -18,6 +18,11 @@
 |---|---|---|
 | Brief | 受众、时长、比例、平台明确 | pass：DIG 60 秒 9:16 双语 demo |
 | Sources | 每个素材有 source/provider/sourcePage 或 localPath | pass：DIG manifest |
+| Provider generation | 远端创建有本次确认、费用估算/未知费用声明、任务 ID、模型和实际积分字段 | missing evidence：未运行付费 provider fixture |
+| Provider upload | 上传本地参考文件前有独立 `--allow-upload` 证据 | pass：mock gate；真实上传未执行 |
+| Generated asset | 临时 URL 已本地化，SHA-256/MIME/媒体签名通过，manifest 不含签名 URL | pass：mock adapter + 本地 ingest；真实 provider 下载未执行 |
+| Narration identity | 新中文讲解默认优先 ListenHub；“向阳乔木”精确解析到当前 speaker ID，缺失/歧义时不静默换人；asset/path/content SHA/speaker/text 可审计 | deterministic gate pass；真实账号 speaker 与付费 TTS blind review 等密钥轮换后仍属 missing evidence |
+| Image direction | 生图有内容推导的 visual bible，主体/年代/情绪/色板/光线/构图/字幕留白与成片一致 | concrete plan gate pass（唐代李白水墨 fixture）；每个真实项目仍需 contact sheet 人工连续性审查 |
 | License | 外部素材有 licenseStatus 和 attribution | warn：Pexels 已核验；33tc 仅私人学习演示 |
 | Video | 有视频流，分辨率符合目标平台 | pass：1080×1920 / H.264 / 30 fps |
 | Audio | 有音频流或明确无音频原因 | pass：AAC 48 kHz stereo |
@@ -63,4 +68,4 @@ node scripts/qcut.js render /path/to/project --profile final --json
 
 ## missing evidence
 
-当前证据覆盖一个 60 秒 `hybrid-studio + english-mix` 真实项目、preview/standard 冷暖性能基准和一个 2 秒 renderer smoke fixture；仍未覆盖所有工作流、平台、外部引擎与 clean-host 字体环境。每个真实项目仍应单独生成本项目的 scorecard。
+当前证据覆盖一个 60 秒 `hybrid-studio + english-mix` 真实项目、preview/standard 冷暖性能基准、一个 1.208333 秒真实 file-narration renderer/provenance/tamper smoke fixture、37 项核心安全测试，以及 182 项动态计数的 ListenHub mock/安全门测试；未执行付费 provider 生成，也没有 provider 数据保留/训练使用证据。仍未覆盖所有工作流、平台、外部引擎与 clean-host 字体环境。每个真实项目仍应单独生成本项目的 scorecard。

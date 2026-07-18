@@ -4,16 +4,18 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const childProcess = require('child_process');
 const { searchClipSeek } = require('./adapters/clipseek');
 const { detect33tc } = require('./adapters/33tc');
+const { detectListenHub } = require('./adapters/listenhub');
 const { scanLocal } = require('./adapters/local');
 const { verifyVideo } = require('./verify_video');
 const { generateAss, readCaptions } = require('./renderers/ass');
 const { generateHtmlScene, sceneFromIr } = require('./renderers/html_scene');
 const { readAssets, makeLicenseReport } = require('./license_report');
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 function displayPath(file) {
   if (!file || typeof file !== 'string') return file;
@@ -38,7 +40,7 @@ const WORKFLOWS = {
     title: '免费素材故事片',
     bestFor: ['科普', '儿童启蒙', '行业介绍', '概念解释', 'B-roll 故事'],
     defaultFormat: '9:16',
-    engines: ['clipseek', 'pexels/pixabay provider pages', 'imagegen', 'ffmpeg-full'],
+    engines: ['clipseek', 'pexels/pixabay provider pages', 'imagegen', 'listenhub image/video/tts', 'ffmpeg-full'],
     outputs: ['mp4', 'asset license report', 'voiceover script']
   },
   'person-profile': {
@@ -59,7 +61,7 @@ const WORKFLOWS = {
     title: '电影感短片 / AI 视觉叙事',
     bestFor: ['氛围片', '概念片', '故事预告', '诗性短片', '城市/自然主题'],
     defaultFormat: '21:9, 16:9, or 9:16',
-    engines: ['imagegen', 'clipseek', 'camera moves', 'color grade', 'ffmpeg-full'],
+    engines: ['imagegen', 'listenhub image/video/music', 'clipseek', 'camera moves', 'color grade', 'ffmpeg-full'],
     outputs: ['cinematic mp4', 'shot list', 'look bible']
   },
   'product-launch': {
@@ -80,7 +82,7 @@ const WORKFLOWS = {
     title: '口播精剪 + 字幕包装',
     bestFor: ['访谈', '课程', '播客切片', '个人观点', '直播回放'],
     defaultFormat: '9:16 or 16:9',
-    engines: ['baocut optional', 'transcription', 'b-roll', 'ffmpeg-full'],
+    engines: ['baocut optional', 'coli asr', 'listenhub tts/voice', 'b-roll', 'ffmpeg-full'],
     outputs: ['clean cut', 'subtitle track', 'chapter clips']
   },
   'data-story': {
@@ -107,6 +109,19 @@ const TECHNIQUES = [
   'subtitle_highlight', 'lower_third', 'film_grain', 'letterbox',
   'sound_ducking', 'beat_cut', 'chapter_card', 'archive_card'
 ];
+
+const VISUAL_DIRECTIONS = {
+  'english-mix': 'cinematic editorial frames that preserve the source film mood, with restrained language-learning annotations',
+  'stock-story': 'clear documentary editorial imagery whose subject, setting, age range, and emotional tone come from the brief',
+  'person-profile': 'credible archival-documentary portraiture with period-aware materials, lighting, typography, and color',
+  explainer: 'clean geometric explanatory visuals with a limited palette, legible hierarchy, and concept-first composition',
+  'cinematic-short': 'cinematic, story-specific imagery with coherent lens language, production design, lighting, and grade',
+  'product-launch': 'premium product visualization with precise UI hierarchy, controlled reflections, and brand-consistent color',
+  'social-short': 'platform-native editorial imagery with an immediate focal point, bold crop, and caption-safe negative space',
+  'talking-head': 'natural editorial B-roll that supports the speaker without competing with faces or captions',
+  'data-story': 'information-led editorial imagery that supports charts and labels instead of adding decorative noise',
+  'hybrid-studio': 'a content-derived visual language selected from the subject, audience, era, emotion, platform, and medium'
+};
 
 function parseArgs(argv) {
   const flags = {};
@@ -256,7 +271,7 @@ function makeScene(index, purpose, visual, technique, text) {
     id: `s${String(index).padStart(2, '0')}`,
     purpose,
     visual,
-    sourceStrategy: ['local', 'clipseek', 'imagegen'],
+    sourceStrategy: ['local', 'clipseek', 'imagegen', 'listenhub'],
     motion: technique,
     transition: index === 1 ? 'cold_open' : 'match_cut_or_soft_cut',
     text: {
@@ -271,11 +286,81 @@ function makeScene(index, purpose, visual, technique, text) {
   };
 }
 
+function firstMatchingDirection(text, entries, fallback) {
+  const match = entries.find(([words]) => words.some((word) => text.includes(word)));
+  return match ? match[1] : fallback;
+}
+
+function deriveVisualBible(brief, workflowId, format) {
+  const text = String(brief || '').toLowerCase();
+  const medium = firstMatchingDirection(text, [
+    [['水墨', 'ink wash', 'ink-wash'], 'Chinese ink-wash painting with expressive dry-brush texture and disciplined negative space'],
+    [['油画', 'oil paint'], 'period-aware oil painting with visible brushwork and restrained museum color'],
+    [['插画', 'illustration', '绘本'], 'editorial illustration with shape-led composition and controlled texture'],
+    [['3d', '三维', 'c4d'], 'cinematic 3D visualization with physically plausible materials and lighting'],
+    [['档案', 'archive', '历史照片', '老照片'], 'archival documentary treatment using era-authentic photographic materials'],
+    [['网页', 'ui', 'app', '产品'], 'premium product/UI visualization with crisp hierarchy and controlled reflections']
+  ], VISUAL_DIRECTIONS[workflowId]);
+  const era = firstMatchingDirection(text, [
+    [['唐代', '唐朝', '李白'], 'Tang-dynasty China; historically plausible clothing, architecture, paper, tools, and landscape'],
+    [['宋代', '宋朝'], 'Song-dynasty China; historically plausible material culture and restrained literati taste'],
+    [['古代', '历史', 'ancient'], 'period-specific historical world; avoid modern objects and generic fantasy'],
+    [['民国', '1920', '1930'], 'Republican-era China with period-authentic streets, print, tailoring, and photography'],
+    [['未来', '科幻', 'future', 'sci-fi'], 'near-future world grounded in coherent industrial design rather than neon cliché'],
+    [['复古', 'retro', 'vintage'], 'era-aware vintage treatment whose typography and materials match the named period']
+  ], 'contemporary and subject-authentic; do not invent an unrelated historical period');
+  const emotion = firstMatchingDirection(text, [
+    [['忧郁', '悲伤', 'melancholy', 'sad'], text.includes('希望') || text.includes('hope')
+      ? 'melancholic but hopeful, moving from solitude toward a restrained warm release'
+      : 'quietly melancholic, reflective, and emotionally restrained'],
+    [['希望', '治愈', 'hope', 'healing'], 'hopeful and humane without sentimental excess'],
+    [['紧张', '悬疑', 'thriller', 'suspense'], 'tense and investigative with controlled visual uncertainty'],
+    [['热血', '激昂', 'epic'], 'energetic and expansive with earned heroic scale'],
+    [['幽默', '搞笑', 'funny', 'comedy'], 'witty and playful with clear visual timing rather than random exaggeration']
+  ], 'clear, intelligent, and emotionally appropriate to the subject');
+  const palette = emotion.includes('melancholic but hopeful')
+    ? ['ink black', 'mist blue-gray', 'aged paper', 'one restrained warm amber accent']
+    : workflowId === 'product-launch'
+      ? ['brand-led neutral base', 'one functional accent', 'controlled highlight color']
+      : workflowId === 'explainer' || workflowId === 'data-story'
+        ? ['deep neutral background', 'high-legibility foreground', 'two semantic accent colors']
+        : ['subject-derived dominant', 'supporting neutral', 'single emotional accent'];
+  const lighting = emotion.includes('melancholic but hopeful')
+    ? 'soft overcast key with a subtle warm break in the distance; preserve detail in shadows'
+    : workflowId === 'cinematic-short'
+      ? 'motivated cinematic lighting with coherent direction and controlled contrast'
+      : 'clear motivated light that supports subject readability and continuity';
+  const composition = String(format).includes('9:16')
+    ? 'vertical-first composition, immediate focal point, layered depth, upper/lower caption-safe negative space'
+    : String(format).includes('21:9')
+      ? 'widescreen cinematic blocking, strong horizontal depth, protected subtitle-safe lower third'
+      : 'balanced cinematic 16:9 framing, clear subject hierarchy, protected title and subtitle safe areas';
+  const bible = {
+    strategy: 'content-derived',
+    subject: String(brief).trim(),
+    medium,
+    era,
+    emotion,
+    palette,
+    lighting,
+    composition,
+    texture: medium.includes('ink-wash') ? 'fibrous xuan paper, ink bloom, dry-brush edges; no plastic digital sheen' : 'content-appropriate, restrained, and consistent across scenes',
+    typography: workflowId === 'person-profile' ? 'period-aware editorial titling with modern subtitle legibility' : 'legible editorial typography matched to the delivery platform',
+    continuity: ['subject identity', 'palette', 'lighting direction', 'lens/composition', 'texture', 'typography'],
+    negativePrompt: ['generic stock-photo look', 'style drift', 'unmotivated neon', 'anachronisms', 'watermarks', 'garbled text', 'extra limbs or duplicate subjects'],
+    rule: 'Every generated image prompt must include this bible ID and preserve all locked fields; only scene action, shot size, and composition may vary.'
+  };
+  bible.id = `vb-${crypto.createHash('sha256').update(JSON.stringify(bible)).digest('hex').slice(0, 16)}`;
+  bible.promptPrefix = [bible.subject, bible.medium, bible.era, bible.emotion, `palette: ${bible.palette.join(', ')}`, bible.lighting, bible.composition].join('; ');
+  return bible;
+}
+
 function buildPlan(brief, options = {}) {
   const workflowId = inferWorkflow(brief, options.workflow);
   const workflow = WORKFLOWS[workflowId];
   const duration = Number(options.duration || (workflowId === 'social-short' ? 45 : 60));
   const format = options.format || workflow.defaultFormat || '16:9';
+  const visualBible = deriveVisualBible(brief, workflowId, format);
   const scenes = [
     makeScene(1, 'hook', '最强视觉或最有情绪的一句话/画面，3 秒内抓住注意力', 'smash_cut', '先让观众停下来。'),
     makeScene(2, 'context', '用信息卡或旁白说明主题、人物、概念或问题', 'slow_push_in', '告诉观众这条视频要解决什么。'),
@@ -302,14 +387,32 @@ function buildPlan(brief, options = {}) {
       level: 'professional',
       pacing: workflowId === 'social-short' ? 'fast hook-heavy' : 'cinematic educational',
       typography: ['kinetic captions', 'safe-area subtitles', 'title cards'],
-      color: ['clean contrast', 'subtle film grain when appropriate']
+      color: ['clean contrast', 'subtle film grain only when the subject and era support it'],
+      visualBible
     },
     sources: {
       preferred: workflow.engines,
-      fallback: ['local files', 'imagegen', 'html-renderer'],
+      fallback: ['local files', 'imagegen', 'listenhub generated media', 'html-renderer'],
       licenseRule: 'Record sourcePage/license/attribution for every non-local asset.'
     },
     scenes,
+    generation: {
+      narration: {
+        providerPriority: ['listenhub', 'project-file', 'macos-say'],
+        preferredVoiceName: '向阳乔木',
+        language: 'zh',
+        resolutionRule: 'Resolve an exact speaker-name match to a current speaker ID; never silently substitute another voice.',
+        timelineRule: 'Fetch and ingest generated audio before using narration.engine=file; never place a provider URL in timeline.'
+      },
+      images: {
+        styleStrategy: 'content-derived',
+        visualBibleRequired: true,
+        visualBibleId: visualBible.id,
+        promptPrefix: visualBible.promptPrefix,
+        negativePrompt: visualBible.negativePrompt,
+        consistencyRule: 'Keep the visual bible stable across scenes and vary only scene content, shot size, action, and composition.'
+      }
+    },
     render: {
       primary: 'ffmpeg-full',
       optional: ['html-renderer', 'motion', 'manim', 'slides-renderer', 'imagegen'],
@@ -363,7 +466,8 @@ async function commandDoctor(flags) {
       imagegen: {
         available: 'agent-tool-dependent',
         role: 'generate missing stills, covers, illustrations, background plates'
-      }
+      },
+      listenhub: detectListenHub({ capabilities: true })
     },
     optionalTools: {
       python3: displayPath(commandPath('python3')),
@@ -521,6 +625,26 @@ async function command33tc(rawArgs) {
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
+async function delegateNodeScript(scriptName, rawArgs) {
+  const script = path.join(__dirname, scriptName);
+  if (!fs.existsSync(script)) throw new Error(`QiaoCut command implementation not found: ${scriptName}`);
+  const result = childProcess.spawnSync(process.execPath, [script, ...rawArgs], { stdio: 'inherit' });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status || 1);
+}
+
+async function commandListenHub(rawArgs) {
+  return delegateNodeScript(path.join('adapters', 'listenhub_cli.js'), rawArgs);
+}
+
+async function commandIngest(rawArgs) {
+  return delegateNodeScript('ingest_asset.js', rawArgs);
+}
+
+async function commandFetch(rawArgs) {
+  return delegateNodeScript('fetch_generated.js', rawArgs);
+}
+
 async function commandTechniques(flags) {
   print(TECHNIQUES.map((id) => ({ id })), flags);
 }
@@ -533,12 +657,20 @@ function help() {
 Usage:
   qcut doctor [--json]
   qcut 33tc <search|pick|cut|tasks|download|me> [...args]
+  qcut listenhub doctor|capabilities [--json]
+  qcut listenhub narration --text <text>|--text-file <project-relative.txt>
+              --qcut-project <dir> [--voice-name 向阳乔木] --yes [--json]
+  qcut listenhub asr <file> --model sensevoice --json [--qcut-project <dir>]
+  qcut listenhub <upstream args...> --qcut-project <dir> [--allow-upload] [--yes]
   qcut clipseek "挖掘机" --type video|photo|illustration [--limit 5] [--json]
   qcut local /path/to/assets [--recursive] [--json]
   qcut plan "一句话视频需求" [--workflow english-mix] [--duration 60] [--format 9:16] [--json]
   qcut workflow list|show <id> [--json]
   qcut techniques [--json]
   qcut scaffold ./project --brief "一句话视频需求" [--force] [--json]
+  qcut ingest <project-dir> <local-file> --kind image|video|audio --provider listenhub [--json]
+  qcut fetch <project-dir> --result <private-capture.json> --field result.videoUrl
+             --kind image|video|audio [--output assets/generated/...]
   qcut render <project-dir> [--profile preview|standard|final] [--validation basic|standard|full]
               [--timeline timeline.json] [--output renders/file.mp4] [--no-cache]
               [--keep-build] [--force] [--allow-large] [--json]
@@ -551,6 +683,9 @@ Notes:
   - ClipSeek is a discovery adapter. Verify license on provider source pages.
   - 33tc reads only local app/CLI presence and never prints tokens.
   - 33tc pick/cut may consume account credits. Review the range first; --yes is explicit confirmation.
+  - ListenHub remote creation requires --yes and --qcut-project; local uploads also require --allow-upload.
+  - ListenHub credentials are read only from LISTENHUB_API_KEY or its own local credential store.
+  - Remote task output is captured under project-local .qiaocut/jobs; fetch downloads it before timeline use.
   - Prefer ffmpeg-full for ASS subtitles, overlays, and professional composition.
   - Render paths in timeline.json must stay inside the project directory.
   - Preview is for fast iteration; only final+full is release-ready.
@@ -562,6 +697,9 @@ Notes:
 async function main() {
   const [command = 'help', ...rest] = process.argv.slice(2);
   if (command === '33tc') return command33tc(rest);
+  if (command === 'listenhub') return commandListenHub(rest);
+  if (command === 'ingest') return commandIngest(rest);
+  if (command === 'fetch') return commandFetch(rest);
   if (command === 'render') return commandRender(rest);
   const { flags, positional } = parseArgs(rest);
   if (command === 'help' || command === '--help' || command === '-h') return help();

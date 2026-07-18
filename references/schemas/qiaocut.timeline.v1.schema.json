@@ -91,13 +91,24 @@
     "narration": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["engine", "cues"],
+      "required": ["engine"],
       "properties": {
-        "engine": { "enum": ["macos-say", "none"] },
+        "engine": { "enum": ["macos-say", "file", "none"] },
+        "path": { "$ref": "#/$defs/projectPath" },
+        "start": { "type": "number", "minimum": 0 },
+        "trim": { "type": "number", "minimum": 0 },
+        "duration": { "type": "number", "exclusiveMinimum": 0 },
+        "gain": { "type": "number", "minimum": 0, "maximum": 4 },
+        "provider": { "type": "string" },
+        "assetId": { "type": "string" },
+        "speakerId": { "type": "string" },
+        "speakerName": { "type": "string" },
+        "narrationTextSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "voice": { "type": "string" },
         "rate": { "type": "number", "exclusiveMinimum": 0 },
         "cues": {
           "type": "array",
+          "minItems": 1,
           "items": {
             "type": "object",
             "additionalProperties": true,
@@ -108,11 +119,36 @@
               "maxDuration": { "type": "number", "exclusiveMinimum": 0 },
               "text": { "type": "string", "minLength": 1 },
               "voice": { "type": "string" },
-              "rate": { "type": "number", "exclusiveMinimum": 0 }
+              "rate": { "type": "number", "exclusiveMinimum": 0 },
+              "gain": { "type": "number", "minimum": 0, "maximum": 4 }
             }
           }
         }
-      }
+      },
+      "oneOf": [
+        {
+          "properties": { "engine": { "const": "macos-say" } },
+          "required": ["cues"]
+        },
+        {
+          "properties": { "engine": { "const": "file" } },
+          "required": ["path"]
+        },
+        {
+          "properties": { "engine": { "const": "none" } }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": { "provider": { "const": "listenhub" } },
+            "required": ["provider"]
+          },
+          "then": {
+            "required": ["assetId", "speakerId", "speakerName", "narrationTextSha256"]
+          }
+        }
+      ]
     }
   }
 }

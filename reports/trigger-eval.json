@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "total": 11,
+  "total": 16,
   "failures": [],
   "results": [
     {
@@ -39,6 +39,21 @@
       "got": true
     },
     {
+      "id": "ai_generated_trailer",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "url_to_explainer",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "qiaomu_voice_content_style",
+      "expected": true,
+      "got": true
+    },
+    {
       "id": "only_article",
       "expected": false,
       "got": false
@@ -55,6 +70,16 @@
     },
     {
       "id": "translation_only",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "podcast_only",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "listenhub_account_only",
       "expected": false,
       "got": false
     }
