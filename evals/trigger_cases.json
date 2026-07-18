@@ -1,0 +1,86 @@
+{
+  "should_trigger": [
+    {
+      "id": "english_movie_mix",
+      "input": "搜索几句电影里的脏话台词，混剪成英语学习视频",
+      "reason": "movie dialogue plus English-learning video"
+    },
+    {
+      "id": "stock_excavator",
+      "input": "用免费素材做一个 60 秒挖掘机英语启蒙视频",
+      "reason": "stock media plus video creation"
+    },
+    {
+      "id": "person_profile",
+      "input": "介绍乔布斯，做一个电影感人物短片",
+      "reason": "person profile video"
+    },
+    {
+      "id": "explainer",
+      "input": "用 3Blue1Brown 风格解释 Transformer attention，生成视频",
+      "reason": "explainer animation"
+    },
+    {
+      "id": "product_launch",
+      "input": "给我的网站做一个产品发布视频，网页动效融入剪辑",
+      "reason": "product launch video with web motion"
+    },
+    {
+      "id": "talking_head",
+      "input": "把这个口播剪成小红书风格，强字幕、B-roll、卡点转场",
+      "reason": "talking-head edit"
+    },
+    {
+      "id": "mask_effect",
+      "input": "我想做视频遮罩和文字跟随的高级剪辑",
+      "reason": "video mask and advanced editing"
+    },
+    {
+      "id": "ai_generated_trailer",
+      "input": "生成三个电影感 AI 视频镜头、中文旁白和配乐，剪成 45 秒预告片",
+      "reason": "AI video, TTS, music, and final editing workflow"
+    },
+    {
+      "id": "url_to_explainer",
+      "input": "读取这个网页，提炼脚本，配音并做成两分钟知识视频",
+      "reason": "content extraction is requested as part of a video deliverable"
+    },
+    {
+      "id": "qiaomu_voice_content_style",
+      "input": "用向阳乔木的声音做中文讲解，配图要跟视频内容和年代感匹配",
+      "reason": "video narration identity and content-derived image direction"
+    }
+  ],
+  "should_not_trigger": [
+    {
+      "id": "only_article",
+      "input": "帮我写一篇关于挖掘机的公众号文章",
+      "reason": "article only"
+    },
+    {
+      "id": "only_image",
+      "input": "生成一张挖掘机海报，不需要做成短片",
+      "reason": "image only with explicit no video"
+    },
+    {
+      "id": "ffmpeg_question",
+      "input": "ffmpeg 的 -crf 参数是什么意思？",
+      "reason": "general ffmpeg explanation"
+    },
+    {
+      "id": "translation_only",
+      "input": "把这句英文翻译成中文：I am fine.",
+      "reason": "translation only"
+    },
+    {
+      "id": "podcast_only",
+      "input": "把这篇文章变成双人播客音频，不需要视频",
+      "reason": "audio-only podcast belongs to a dedicated audio workflow"
+    },
+    {
+      "id": "listenhub_account_only",
+      "input": "帮我看看 ListenHub 账户还有多少积分",
+      "reason": "account status alone is not a video editing request"
+    }
+  ]
+}

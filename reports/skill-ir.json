@@ -1,0 +1,214 @@
+{
+  "name": "qiaomu-cut",
+  "version": "0.4.0",
+  "mode": "Governed",
+  "owner": {
+    "name": "向阳乔木",
+    "x": "https://x.com/vista8",
+    "github": "https://github.com/joeseesun/"
+  },
+  "intent": {
+    "recurringJob": "Turn one-sentence video requests into source-aware, renderer-ready, quality-checked video projects.",
+    "targetUsers": [
+      "Qiaomu/Codex users creating professional videos",
+      "Creators making English-learning, explainer, person-profile, product, or social videos",
+      "Agents that need a reusable video production workflow"
+    ],
+    "finishedOutputs": [
+      "QiaoCut IR",
+      "asset manifest",
+      "license report",
+      "quality report",
+      "final video when rendering is executed"
+    ]
+  },
+  "skillIR": {
+    "layers": [
+      "brief understanding",
+      "workflow routing",
+      "source adapters",
+      "governed remote generation and local ASR",
+      "private provider task capture and verified asset ingestion",
+      "ListenHub-first Chinese narration with exact 向阳乔木 speaker resolution",
+      "content-derived image visual bible and continuity gate",
+      "shot and motion design",
+      "renderer selection",
+      "profile-based preview and mastering",
+      "content-addressed render cache",
+      "quality gates",
+      "delivery reports"
+    ],
+    "coreCommands": [
+      "qcut doctor",
+      "qcut clipseek",
+      "qcut local",
+      "qcut plan",
+      "qcut workflow",
+      "qcut render",
+      "qcut 33tc",
+      "qcut listenhub",
+      "qcut fetch",
+      "qcut ingest",
+      "qcut verify"
+    ],
+    "workflows": [
+      "english-mix",
+      "stock-story",
+      "person-profile",
+      "explainer",
+      "cinematic-short",
+      "product-launch",
+      "social-short",
+      "talking-head",
+      "data-story",
+      "hybrid-studio"
+    ],
+    "defaultGeneration": {
+      "narration": {
+        "providerPriority": ["listenhub", "project-file", "macos-say-preview"],
+        "preferredVoiceName": "向阳乔木",
+        "speakerResolution": "exact current speaker-list match; no silent substitution"
+      },
+      "images": {
+        "styleStrategy": "derive from subject, audience, era, emotion, platform, and medium",
+        "continuity": "lock subject identity, palette, lighting, lens/composition, texture, and typography in a visual bible"
+      }
+    }
+  },
+  "performanceWorkflow": {
+    "defaultCliProfile": "final",
+    "skillDefaultSequence": [
+      "preview for content, caption, pacing, and composition iteration",
+      "standard only for internal or speed-sensitive delivery",
+      "final once content is locked and release evidence is required"
+    ],
+    "profiles": {
+      "preview": {
+        "maxDimension": 960,
+        "maxFps": 24,
+        "normalization": "single-pass",
+        "validation": "basic",
+        "contactSheet": false
+      },
+      "standard": {
+        "maxDimension": 1280,
+        "maxFps": 30,
+        "normalization": "single-pass",
+        "validation": "standard",
+        "contactSheet": "up to 8 frames"
+      },
+      "final": {
+        "dimensionsAndFps": "timeline-native",
+        "normalization": "two-pass",
+        "validation": "full",
+        "contactSheet": true
+      }
+    },
+    "validation": {
+      "always": [
+        "timeline and time-bound consistency",
+        "path and symlink containment",
+        "input-output alias and no-clobber checks",
+        "resource safety limits",
+        "stream, duration, dimensions, frame-rate, pixel-format, and non-empty output"
+      ],
+      "standardAdds": [
+        "integrated loudness",
+        "true peak",
+        "silence boundaries"
+      ],
+      "fullAdds": [
+        "full black-frame scan"
+      ],
+      "releaseReady": "only final + full + verification pass + verified caption font when captions exist",
+      "duplicateVerify": "Do not run standalone qcut verify after qcut render succeeds for the same output."
+    },
+    "cache": {
+      "path": ".qiaocut/cache",
+      "enabledByDefault": true,
+      "artifacts": [
+        "shot segments",
+        "macOS narration cues",
+        "captioned picture masters",
+        "private local caption-font copies"
+      ],
+      "bypass": "--no-cache"
+    },
+    "fontPolicy": "Prefer project fontsDir; otherwise reuse an installed local Noto Sans CJK SC only in the private project cache. Never bundle, upload, or redistribute a font discovered on the user's machine.",
+    "measuredBaseline": {
+      "fixture": "60-second DIG bilingual demo on the development Mac",
+      "legacyFinalSeconds": 71.6,
+      "previewColdSeconds": 27.7,
+      "previewWarmSeconds": "3.3-4.1",
+      "standardColdSecondsTtsWarm": 27.1,
+      "standardWarmSeconds": 4.1,
+      "finalColdSecondsTtsWarm": 65.6,
+      "finalWarmSeconds": 8.5,
+      "scope": "same-machine relative measurements, not a cross-machine performance guarantee"
+    }
+  },
+  "trust": {
+    "readsLocalAccountState": "only through independently installed 33tc and ListenHub adapters when invoked; qcut redacts structured credential fields/URLs and external adapters must not emit unlabelled raw credentials",
+    "printsSecrets": false,
+    "networkAccess": "public media discovery, cited information sources, and explicitly confirmed ListenHub remote operations",
+    "writes": "generated project outputs and reports only; no-clobber by default, explicit --force for replacement",
+    "destructiveActions": "not allowed",
+    "credentialBoundary": "LISTENHUB_API_KEY or the provider credential store only; no API-key CLI argument, logs, manifests, Git, or public task output",
+    "uploadBoundary": "local references require a distinct --allow-upload confirmation in addition to --yes",
+    "vendorBoundary": "marswaveai/skills is preserved as a reference-only locked snapshot; nested skills and cola-avatar-pack instructions are quarantined",
+    "rollbackBoundary": "delete project-private .qiaocut jobs/cache; remove unreferenced generated assets; uninstall dependency via package manager if desired"
+  },
+  "evidence": {
+    "implemented": [
+      "SKILL.md routing and runtime instructions",
+      "GitHub-ready README",
+      "agents/interface.yaml",
+      "ClipSeek read-only search adapter",
+      "local asset scanner",
+      "33tc presence detector",
+      "ffmpeg-full doctor",
+      "QiaoCut IR plan generator",
+      "video ffprobe verifier",
+      "qiaocut.timeline.v1 renderer with preview/standard/final profiles, layered validation, bilingual ASS, deterministic score, macOS narration, ducking, one- or two-pass loudness, contact sheet, strict path boundary, and technical verification",
+      "project-local content-addressed cache for shot segments, narration cues, and captioned picture masters",
+      "automatic reuse of an installed local Noto Sans CJK SC through private project cache without font redistribution",
+      "measured 60-second DIG performance evidence for cold and warm preview/standard/final renders",
+      "external 33tc adapter delegation without bundled private protocol",
+      "exact 78-entry marswaveai/skills snapshot with MIT license, commit/tree lock, content digest, and isolation notice",
+      "ListenHub CLI capability and authentication-state detector that never prints credentials",
+      "per-request remote-cost gate, separate local-upload gate, API-key argument rejection, and signed-URL display redaction",
+      "project-private ListenHub task capture with mode 0600",
+      "HTTPS generated-asset downloader with private-address blocking, redirect/size/type/signature checks, atomic hard-link placement, and no-clobber",
+      "SHA-256 generated-asset ingest and manifest provenance",
+      "Coli local ASR route",
+      "file-backed narration engine for downloaded TTS/Voice/Podcast audio",
+      "182-assertion dynamically counted mock ListenHub security and integration smoke test, including exact 向阳乔木 lossless narration, auto-ingest provenance, credential-store gates, generalized secret-flag rejection, and mixed-log/storage-URL redaction",
+      "trigger eval script",
+      "skill validation script"
+    ],
+    "missingEvidence": [
+      "end-to-end render fixtures for every workflow (one 60-second bilingual hybrid demo and one 1.2-second real file-narration smoke fixture exist)",
+      "provider-backed Pexels/Pixabay direct download adapters",
+      "HTML/Motion/Manim renderer implementations beyond design contract",
+      "public GitHub install proof before publishing",
+      "official public 33TaiCi API or permission for a bundled zero-install adapter",
+      "paid ListenHub provider generation tests",
+      "provider data-retention, training-use, regional-processing, and downstream-deletion evidence",
+      "real Coli model transcription and word-alignment evidence",
+      "clean-host ListenHub/Coli install proof",
+      "clean-host Linux and Windows render evidence"
+    ]
+  },
+  "releaseGate": {
+    "requiredBeforePublish": [
+      "python3 scripts/validate_skill.py .",
+      "python3 scripts/trigger_eval.py . --cases evals/trigger_cases.json --output reports/trigger-eval.json",
+      "node scripts/qcut.js doctor --json",
+      "node scripts/listenhub_smoke.js",
+      "node scripts/verify_marswave_vendor.js",
+      "final-profile fixture render with full validation and releaseReady=true",
+      "secret scan",
+      "skill-publisher dry run"
+    ]
+  }
+}
