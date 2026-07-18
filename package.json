@@ -1,8 +1,8 @@
 {
   "name": "qiaomu-cut-skill",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Qiaomu agent-native video director skill",
+  "description": "Qiaomu agent-native video director skill with preview, standard, and final render profiles",
   "type": "commonjs",
   "bin": {
     "qcut": "scripts/qcut.js"
@@ -12,6 +12,9 @@
     "clipseek": "node scripts/qcut.js clipseek",
     "plan": "node scripts/qcut.js plan",
     "render": "node scripts/qcut.js render",
+    "render:preview": "node scripts/qcut.js render --profile preview",
+    "render:standard": "node scripts/qcut.js render --profile standard",
+    "render:final": "node scripts/qcut.js render --profile final",
     "security-smoke": "node scripts/security_smoke.js",
     "release-check": "node scripts/release_check.js",
     "workflow": "node scripts/qcut.js workflow list",

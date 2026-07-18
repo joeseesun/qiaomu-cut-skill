@@ -2,6 +2,7 @@
 'use strict';
 
 const fs = require('fs');
+const crypto = require('crypto');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -9,6 +10,42 @@ const { generateBilingualAss, readCaptionDocument } = require('./renderers/bilin
 const { generateProceduralMusic } = require('./renderers/procedural_music');
 
 class UsageError extends Error {}
+
+const SEGMENT_CACHE_VERSION = 'qiaomu-cut-segment-v1';
+const TTS_CACHE_VERSION = 'qiaomu-cut-macos-say-v1';
+const PICTURE_CACHE_VERSION = 'qiaomu-cut-picture-v2';
+const RENDER_PROFILES = Object.freeze({
+  preview: Object.freeze({
+    maxDimension: 960,
+    maxFps: 24,
+    intermediatePreset: 'ultrafast',
+    intermediateCrf: 28,
+    preset: 'ultrafast',
+    crf: 25,
+    normalization: 'single-pass',
+    validation: 'basic',
+    contactSheet: false
+  }),
+  standard: Object.freeze({
+    maxDimension: 1280,
+    maxFps: 30,
+    intermediatePreset: 'veryfast',
+    intermediateCrf: 24,
+    preset: 'veryfast',
+    crf: 21,
+    normalization: 'single-pass',
+    validation: 'standard',
+    contactSheet: true
+  }),
+  final: Object.freeze({
+    maxDimension: null,
+    maxFps: null,
+    normalization: 'two-pass',
+    validation: 'full',
+    contactSheet: true
+  })
+});
+const VALIDATION_LEVELS = new Set(['basic', 'standard', 'full']);
 
 function displayPath(file) {
   if (!file || typeof file !== 'string') return file;
@@ -29,6 +66,89 @@ function finite(value, fallback) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.keys(value).sort().reduce((result, key) => {
+    result[key] = stableValue(value[key]);
+    return result;
+  }, {});
+}
+
+function stableStringify(value) {
+  return JSON.stringify(stableValue(value));
+}
+
+function suffixedPath(file, suffix) {
+  const extension = path.extname(file);
+  const stem = extension ? file.slice(0, -extension.length) : file;
+  return `${stem}.${suffix}${extension}`;
+}
+
+function scaledDimensions(width, height, maxDimension) {
+  if (!maxDimension || Math.max(width, height) <= maxDimension) return { width, height };
+  const ratio = maxDimension / Math.max(width, height);
+  const even = (value) => Math.max(2, Math.round(value * ratio / 2) * 2);
+  return { width: even(width), height: even(height) };
+}
+
+function applyRenderProfile(sourceTimeline, options = {}) {
+  const name = options.profile || 'final';
+  const profile = RENDER_PROFILES[name];
+  if (!profile) throw new UsageError(`Unknown render profile: ${name}. Expected preview, standard, or final.`);
+  const validation = options.validation || profile.validation;
+  if (!VALIDATION_LEVELS.has(validation)) {
+    throw new UsageError(`Unknown validation level: ${validation}. Expected basic, standard, or full.`);
+  }
+
+  const timeline = JSON.parse(JSON.stringify(sourceTimeline));
+  timeline.output = { ...(timeline.output || {}) };
+  timeline.reports = { ...(timeline.reports || {}) };
+  timeline._renderProfile = name;
+  timeline._validationLevel = validation;
+  timeline._normalizationMode = profile.normalization;
+
+  if (name !== 'final') {
+    const dimensions = scaledDimensions(
+      finite(timeline.output.width, 0),
+      finite(timeline.output.height, 0),
+      profile.maxDimension
+    );
+    timeline.output.width = dimensions.width;
+    timeline.output.height = dimensions.height;
+    timeline.output.fps = Math.min(finite(timeline.output.fps, profile.maxFps), profile.maxFps);
+    timeline.output.intermediatePreset = profile.intermediatePreset;
+    timeline.output.intermediateCrf = profile.intermediateCrf;
+    timeline.output.preset = profile.preset;
+    timeline.output.crf = profile.crf;
+  }
+
+  const originalOutput = timeline.output.file || 'renders/final.mp4';
+  timeline.output.file = options.output || (name === 'final' ? originalOutput : suffixedPath(originalOutput, name));
+  if (name !== 'final') {
+    if (timeline.captionSource) {
+      timeline.captions = suffixedPath(timeline.captions || 'captions/final.ass', name);
+    }
+    timeline.reports.renderReport = suffixedPath(
+      timeline.reports.renderReport || 'reports/render-report.json',
+      name
+    );
+    if (profile.contactSheet === false) {
+      timeline.reports.contactSheet = false;
+    } else if (timeline.reports.contactSheet !== false) {
+      timeline.reports.contactSheet = suffixedPath(
+        timeline.reports.contactSheet || 'reports/contact-sheet.jpg',
+        name
+      );
+      timeline.reports.contactSheetFrames = Math.min(finite(timeline.reports.contactSheetFrames, 8), 8);
+      timeline.reports.contactSheetThumbWidth = Math.min(finite(timeline.reports.contactSheetThumbWidth, 240), 240);
+    }
+  } else if (options.output) {
+    timeline.output.file = options.output;
+  }
+  return { timeline, name, validation, profile };
 }
 
 function readJson(file) {
@@ -108,6 +228,12 @@ function assertPhysicalPathWithin(root, target, label) {
   }
 }
 
+function ensureInternalDirectory(root, target, label) {
+  assertPhysicalPathWithin(root, target, label);
+  fs.mkdirSync(target, { recursive: true });
+  assertPhysicalPathWithin(root, target, label);
+}
+
 function projectPath(root, relativePath, label, options = {}) {
   if (typeof relativePath !== 'string' || !relativePath.trim()) {
     throw new Error(`${label} must be a non-empty project-relative path.`);
@@ -178,6 +304,7 @@ function preferredFfprobe(ffmpeg) {
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd,
+    env: options.env ? { ...process.env, ...options.env } : process.env,
     encoding: 'utf8',
     stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'inherit'],
     maxBuffer: options.maxBuffer || 16 * 1024 * 1024
@@ -370,13 +497,14 @@ function preflightProjectIO(io, options = {}) {
 
 function gradeFilter(timeline, shot) {
   const look = { ...(timeline.look || {}), ...(shot.look || {}) };
+  const preview = timeline._renderProfile === 'preview';
   const contrast = clamp(finite(look.contrast, 1.035), 0.5, 2);
   const saturation = clamp(finite(look.saturation, 0.95), 0, 3);
   const brightness = clamp(finite(look.brightness, -0.008), -0.5, 0.5);
   const gamma = clamp(finite(look.gamma, 0.995), 0.2, 5);
   const filters = [`eq=contrast=${contrast}:saturation=${saturation}:brightness=${brightness}:gamma=${gamma}`];
-  if (look.vignette !== false) filters.push(`vignette=${typeof look.vignette === 'string' ? look.vignette : 'PI/5'}`);
-  const grain = clamp(finite(look.grain, 0.8), 0, 12);
+  if (!preview && look.vignette !== false) filters.push(`vignette=${typeof look.vignette === 'string' ? look.vignette : 'PI/5'}`);
+  const grain = preview ? 0 : clamp(finite(look.grain, 0.8), 0, 12);
   if (grain > 0) filters.push(`noise=alls=${grain}:allf=t+u`);
   filters.push('format=yuv420p');
   return filters.join(',');
@@ -396,6 +524,7 @@ function zoomExpression(motion, frames) {
 
 function imageFilter(shot, timeline, frames) {
   const { width, height, fps } = timeline.output;
+  const scaleFlags = timeline._renderProfile === 'preview' ? 'bilinear' : 'lanczos';
   const fit = shot.fit || 'cover';
   const zoom = zoomExpression(shot.motion || 'pushIn', frames);
   let composition;
@@ -404,22 +533,23 @@ function imageFilter(shot, timeline, frames) {
     const foregroundHeight = Math.max(2, height - Math.round(height * 0.156));
     composition = [
       '[0:v]split=2[bg][fg]',
-      `[bg]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},gblur=sigma=32,eq=brightness=-0.11:saturation=0.72[bgv]`,
-      `[fg]scale=${foregroundWidth}:${foregroundHeight}:force_original_aspect_ratio=decrease:flags=lanczos[fgv]`,
+      `[bg]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=${scaleFlags},crop=${width}:${height},gblur=sigma=32,eq=brightness=-0.11:saturation=0.72[bgv]`,
+      `[fg]scale=${foregroundWidth}:${foregroundHeight}:force_original_aspect_ratio=decrease:flags=${scaleFlags}[fgv]`,
       `[bgv][fgv]overlay=(W-w)/2:(H-h)/2:format=auto[composed]`
     ].join(';');
   } else if (fit === 'contain') {
-    composition = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black[composed]`;
+    composition = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=${scaleFlags},pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black[composed]`;
   } else {
     const workingWidth = Math.ceil(width * 1.2 / 2) * 2;
     const workingHeight = Math.ceil(height * 1.2 / 2) * 2;
-    composition = `[0:v]scale=${workingWidth}:${workingHeight}:force_original_aspect_ratio=increase:flags=lanczos,crop=${workingWidth}:${workingHeight}[composed]`;
+    composition = `[0:v]scale=${workingWidth}:${workingHeight}:force_original_aspect_ratio=increase:flags=${scaleFlags},crop=${workingWidth}:${workingHeight}[composed]`;
   }
   return `${composition};[composed]zoompan=${zoom}:d=1:s=${width}x${height}:fps=${fps},settb=AVTB,setsar=1,${gradeFilter(timeline, shot)}[v]`;
 }
 
 function videoFilter(shot, timeline) {
   const { width, height, fps } = timeline.output;
+  const scaleFlags = timeline._renderProfile === 'preview' ? 'bilinear' : 'lanczos';
   const duration = finite(shot.duration, 1);
   const commonTail = `setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=${duration},trim=duration=${duration},fps=${fps},settb=AVTB,setsar=1,${gradeFilter(timeline, shot)}[v]`;
   if (shot.fit === 'containBlur') {
@@ -427,24 +557,87 @@ function videoFilter(shot, timeline) {
     const foregroundHeight = Math.max(2, height - Math.round(height * 0.156));
     return [
       '[0:v]split=2[bg][fg]',
-      `[bg]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},gblur=sigma=32,eq=brightness=-0.11:saturation=0.72[bgv]`,
-      `[fg]scale=${foregroundWidth}:${foregroundHeight}:force_original_aspect_ratio=decrease:flags=lanczos[fgv]`,
+      `[bg]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=${scaleFlags},crop=${width}:${height},gblur=sigma=32,eq=brightness=-0.11:saturation=0.72[bgv]`,
+      `[fg]scale=${foregroundWidth}:${foregroundHeight}:force_original_aspect_ratio=decrease:flags=${scaleFlags}[fgv]`,
       `[bgv][fgv]overlay=(W-w)/2:(H-h)/2:format=auto,${commonTail}`
     ].join(';');
   }
   if (shot.fit === 'contain') {
-    return `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,${commonTail}`;
+    return `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=${scaleFlags},pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,${commonTail}`;
   }
-  return `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},${commonTail}`;
+  return `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=${scaleFlags},crop=${width}:${height},${commonTail}`;
+}
+
+function segmentCacheKey(context, shot, input) {
+  const { timeline, tools } = context;
+  const stat = fs.statSync(input);
+  const output = timeline.output || {};
+  const payload = {
+    version: SEGMENT_CACHE_VERSION,
+    ffmpeg: tools.version,
+    source: {
+      realpath: fs.realpathSync(input),
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+      ctimeMs: stat.ctimeMs,
+      ino: stat.ino
+    },
+    shot,
+    look: timeline.look || null,
+    profile: timeline._renderProfile,
+    output: {
+      width: output.width,
+      height: output.height,
+      fps: output.fps,
+      level: output.level || '4.2',
+      intermediatePreset: output.intermediatePreset || 'veryfast',
+      intermediateCrf: finite(output.intermediateCrf, 18)
+    }
+  };
+  return crypto.createHash('sha256').update(stableStringify(payload)).digest('hex');
+}
+
+function cacheFileAtomically(source, destination) {
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  const temporary = temporarySibling(destination);
+  try {
+    fs.copyFileSync(source, temporary, fs.constants.COPYFILE_FICLONE);
+    commitTemporary(temporary, destination);
+  } catch (error) {
+    try { fs.rmSync(temporary, { force: true }); } catch (_) {}
+    throw error;
+  }
+}
+
+function reusableCacheFile(file, minimumBytes = 1024) {
+  try {
+    const stat = fs.lstatSync(file);
+    return stat.isFile() && stat.size > minimumBytes;
+  } catch {
+    return false;
+  }
 }
 
 function renderShot(context, shot, index) {
-  const { timeline, projectRoot, buildDir, tools, progress } = context;
+  const { timeline, projectRoot, buildDir, tools, progress, cacheRoot, cacheStats } = context;
   const output = timeline.output;
   const duration = finite(shot.duration, 0);
   const frames = Math.round(duration * output.fps);
   const input = projectPath(projectRoot, shot.path, `shot ${shot.id} path`, { exists: true });
   const segment = path.join(buildDir, 'segments', `${String(index + 1).padStart(3, '0')}-${shot.id.replace(/[^a-zA-Z0-9._-]/g, '_')}.mkv`);
+  const cacheFile = cacheRoot
+    ? path.join(cacheRoot, `${segmentCacheKey(context, shot, input)}.mkv`)
+    : null;
+  if (cacheFile && reusableCacheFile(cacheFile)) {
+    cacheStats.hits += 1;
+    cacheStats.segments.hits += 1;
+    progress(`shot ${index + 1}/${timeline.shots.length}: ${shot.id} (cache hit)`);
+    return cacheFile;
+  }
+  if (cacheFile && cacheStats) {
+    cacheStats.misses += 1;
+    cacheStats.segments.misses += 1;
+  }
   fs.mkdirSync(path.dirname(segment), { recursive: true });
   const args = ['-hide_banner', '-loglevel', 'warning', '-y'];
   if (shot.kind === 'image') {
@@ -473,7 +666,9 @@ function renderShot(context, shot, index) {
     '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
     segment
   ], { cwd: projectRoot });
-  return segment;
+  if (!cacheFile) return segment;
+  cacheFileAtomically(segment, cacheFile);
+  return cacheFile;
 }
 
 function concatSegments(context, segments) {
@@ -495,16 +690,59 @@ function concatSegments(context, segments) {
   return assembled;
 }
 
+function resolveCaptionFont(context, document) {
+  const { timeline, projectRoot, fontFilesRoot } = context;
+  if (timeline.fontsDir) {
+    return {
+      family: timeline.font || document.font || 'Noto Sans CJK SC',
+      directory: projectPath(projectRoot, timeline.fontsDir, 'fontsDir', { exists: true }),
+      source: 'project'
+    };
+  }
+  const candidates = [
+    path.join(os.homedir(), 'Library', 'Fonts', 'NotoSansCJKsc-Regular.otf'),
+    '/Library/Fonts/NotoSansCJKsc-Regular.otf',
+    '/opt/homebrew/share/fonts/NotoSansCJKsc-Regular.otf',
+    '/usr/local/share/fonts/NotoSansCJKsc-Regular.otf',
+    '/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+  ];
+  const source = candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+  if (!source) {
+    return {
+      family: timeline.font || document.font || 'Noto Sans CJK SC',
+      directory: null,
+      source: 'system-unverified'
+    };
+  }
+  const stat = fs.statSync(source);
+  const extension = path.extname(source) || '.otf';
+  const fingerprint = crypto.createHash('sha256')
+    .update(`${source}\0${stat.size}\0${stat.mtimeMs}\0${stat.ctimeMs}`)
+    .digest('hex')
+    .slice(0, 16);
+  const directory = path.join(fontFilesRoot, fingerprint);
+  const destination = path.join(directory, `NotoSansCJKsc-Regular${extension}`);
+  ensureInternalDirectory(projectRoot, directory, 'caption font cache');
+  if (!reusableCacheFile(destination, 0) || fs.lstatSync(destination).size !== stat.size) {
+    cacheFileAtomically(source, destination);
+  }
+  return { family: 'Noto Sans CJK SC', directory, source: 'local-auto' };
+}
+
 function prepareCaptions(context) {
   const { timeline, projectRoot, progress } = context;
   if (!timeline.captionSource && !timeline.captions) return null;
   const output = projectPath(projectRoot, timeline.captions || 'captions/final.ass', 'captions');
   if (!timeline.captionSource) {
     if (!fs.existsSync(output)) throw new Error(`Caption ASS not found: ${path.relative(projectRoot, output)}`);
+    context.resolvedCaptionFont = resolveCaptionFont(context, { font: timeline.font });
     return output;
   }
   const input = projectPath(projectRoot, timeline.captionSource, 'captionSource', { exists: true });
   const document = readCaptionDocument(input);
+  const resolvedFont = resolveCaptionFont(context, document);
+  context.resolvedCaptionFont = resolvedFont;
   const events = [...(document.events || []), ...(document.cues || [])];
   if (events.length > 20000) throw new Error('Caption event count exceeds the default safety limit of 20,000.');
   for (const [index, event] of events.entries()) {
@@ -516,7 +754,7 @@ function prepareCaptions(context) {
   const ass = generateBilingualAss(document, {
     width: timeline.output.width,
     height: timeline.output.height,
-    font: timeline.font
+    font: resolvedFont.family
   });
   atomicWriteFile(output, ass, 'utf8');
   return output;
@@ -542,8 +780,31 @@ function narrationSpec(timeline, projectRoot) {
   throw new Error('narration must be a project-relative JSON path or an object.');
 }
 
+function narrationCacheKey(context, spec, cue, start) {
+  const sayStat = fs.statSync('/usr/bin/say');
+  const rate = Math.round(finite(cue.rate, finite(spec.rate, 174)));
+  const remaining = context.timeline.output.duration - start;
+  const declaredMaxDuration = Number.isFinite(Number(cue.maxDuration))
+    ? clamp(Number(cue.maxDuration), 0.05, remaining)
+    : null;
+  const payload = {
+    version: TTS_CACHE_VERSION,
+    platform: process.platform,
+    osRelease: os.release(),
+    sayMtimeMs: sayStat.mtimeMs,
+    ffmpeg: context.tools.version,
+    text: cue.text,
+    voice: cue.voice || spec.voice || null,
+    rate,
+    gain: clamp(finite(cue.gain, finite(spec.gain, 1.18)), 0, 4),
+    declaredMaxDuration,
+    remaining
+  };
+  return crypto.createHash('sha256').update(stableStringify(payload)).digest('hex');
+}
+
 function prepareNarration(context) {
-  const { timeline, projectRoot, buildDir, tools, progress } = context;
+  const { timeline, projectRoot, buildDir, tools, progress, ttsCacheRoot, cacheStats } = context;
   const spec = narrationSpec(timeline, projectRoot);
   if (!spec || spec.engine === 'none') return null;
   if (spec.engine !== 'macos-say') throw new Error(`Unsupported narration engine: ${spec.engine}`);
@@ -568,6 +829,19 @@ function prepareNarration(context) {
     }
     const raw = path.join(ttsDir, `${id}.aiff`);
     const wav = path.join(ttsDir, `${id}.wav`);
+    const cacheFile = ttsCacheRoot
+      ? path.join(ttsCacheRoot, `${narrationCacheKey(context, spec, cue, start)}.wav`)
+      : null;
+    if (cacheFile && reusableCacheFile(cacheFile)) {
+      cacheStats.hits += 1;
+      cacheStats.narration.hits += 1;
+      normalized.push({ id, start, path: cacheFile });
+      continue;
+    }
+    if (cacheFile && cacheStats) {
+      cacheStats.misses += 1;
+      cacheStats.narration.misses += 1;
+    }
     const sayArgs = [];
     if (cue.voice || spec.voice) sayArgs.push('-v', String(cue.voice || spec.voice));
     sayArgs.push('-r', String(Math.round(finite(cue.rate, finite(spec.rate, 174)))), '-o', raw, cue.text);
@@ -597,7 +871,12 @@ function prepareNarration(context) {
       '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2',
       wav
     ], { cwd: projectRoot });
-    normalized.push({ id, start, path: wav });
+    if (cacheFile) {
+      cacheFileAtomically(wav, cacheFile);
+      normalized.push({ id, start, path: cacheFile });
+    } else {
+      normalized.push({ id, start, path: wav });
+    }
   }
   const graphFile = path.join(buildDir, 'narration.ffscript');
   const graph = normalized.map((cue, index) => {
@@ -671,19 +950,113 @@ function prepareMusic(context) {
   }
 }
 
-function renderPicture(context, assembled, captions) {
-  const { timeline, projectRoot, buildDir, tools, progress } = context;
+function captionFontFingerprints(projectRoot, directory) {
+  const extensions = new Set(['.otf', '.otc', '.ttf', '.ttc', '.woff', '.woff2']);
+  const entries = fs.readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() || entry.isSymbolicLink())
+    .filter((entry) => extensions.has(path.extname(entry.name).toLowerCase()))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  if (entries.length > 256) throw new Error('Caption font directory exceeds the 256-file safety limit.');
+  let totalBytes = 0;
+  return entries.map((entry) => {
+    const file = path.join(directory, entry.name);
+    assertPhysicalPathWithin(projectRoot, file, `caption font ${entry.name}`);
+    const stat = fs.statSync(file);
+    if (!stat.isFile()) throw new Error(`Caption font entry is not a regular file: ${entry.name}`);
+    totalBytes += stat.size;
+    if (stat.size > 128 * 1024 * 1024 || totalBytes > 512 * 1024 * 1024) {
+      throw new Error('Caption font files exceed the default size safety limit.');
+    }
+    return {
+      name: entry.name,
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+      ctimeMs: stat.ctimeMs,
+      sha256: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+    };
+  });
+}
+
+function pictureCacheKey(context, segments, captions) {
+  const { timeline, tools } = context;
+  const captionHash = captions
+    ? crypto.createHash('sha256').update(fs.readFileSync(captions)).digest('hex')
+    : null;
+  const segmentFingerprints = segments.map((file) => {
+    const stat = fs.statSync(file);
+    return {
+      name: path.basename(file),
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+      ctimeMs: stat.ctimeMs
+    };
+  });
+  const resolvedFont = context.resolvedCaptionFont || null;
+  const fontDirectory = resolvedFont && resolvedFont.directory ? resolvedFont.directory : null;
+  const fontFiles = captions && fontDirectory
+    ? captionFontFingerprints(context.projectRoot, fontDirectory)
+    : null;
+  const payload = {
+    version: PICTURE_CACHE_VERSION,
+    ffmpeg: tools.version,
+    profile: timeline._renderProfile,
+    captions: captionHash,
+    segments: segmentFingerprints,
+    fonts: captions
+      ? fontDirectory
+        ? { family: resolvedFont.family, files: fontFiles }
+        : { system: os.release(), family: resolvedFont ? resolvedFont.family : (timeline.font || null) }
+      : null,
+    output: {
+      width: timeline.output.width,
+      height: timeline.output.height,
+      fps: timeline.output.fps,
+      duration: timeline.output.duration,
+      preset: timeline.output.preset || 'slow',
+      crf: finite(timeline.output.crf, 18),
+      level: timeline.output.level || '4.2'
+    }
+  };
+  return crypto.createHash('sha256').update(stableStringify(payload)).digest('hex');
+}
+
+function renderPicture(context, assembled, captions, segments) {
+  const {
+    timeline,
+    projectRoot,
+    buildDir,
+    tools,
+    progress,
+    fontCacheRoot,
+    pictureCacheRoot,
+    cacheStats
+  } = context;
+  const deterministicFont = !captions ||
+    (context.resolvedCaptionFont && context.resolvedCaptionFont.source !== 'system-unverified');
+  const cacheFile = pictureCacheRoot && deterministicFont
+    ? path.join(pictureCacheRoot, `${pictureCacheKey(context, segments, captions)}.mp4`)
+    : null;
+  if (cacheFile && reusableCacheFile(cacheFile)) {
+    cacheStats.hits += 1;
+    cacheStats.pictures.hits += 1;
+    progress('mastered picture (cache hit)');
+    return cacheFile;
+  }
+  if (cacheFile && cacheStats) {
+    cacheStats.misses += 1;
+    cacheStats.pictures.misses += 1;
+  }
   const picture = path.join(buildDir, 'picture.mp4');
   let filter = 'format=yuv420p';
   if (captions) {
-    const fonts = timeline.fontsDir
-      ? `:fontsdir='${filterPath(projectPath(projectRoot, timeline.fontsDir, 'fontsDir', { exists: true }))}'`
+    const fonts = context.resolvedCaptionFont && context.resolvedCaptionFont.directory
+      ? `:fontsdir='${filterPath(context.resolvedCaptionFont.directory)}'`
       : '';
     filter = `ass=filename='${filterPath(captions)}'${fonts},format=yuv420p`;
   }
   progress(captions ? 'burning captions and mastering picture' : 'mastering picture');
   const rendered = run(tools.ffmpeg, [
-    '-hide_banner', '-loglevel', 'warning', '-y',
+    '-hide_banner', '-loglevel', 'error', '-y',
     '-i', assembled,
     '-vf', filter,
     '-an', '-t', String(timeline.output.duration),
@@ -693,13 +1066,20 @@ function renderPicture(context, assembled, captions) {
     '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
     '-movflags', '+faststart',
     picture
-  ], { cwd: projectRoot, capture: true });
-  if (/failed to find any fallback with glyph|fontselect:.*failed/i.test(rendered.stderr)) {
+  ], {
+    cwd: projectRoot,
+    capture: true,
+    maxBuffer: 4 * 1024 * 1024,
+    env: { XDG_CACHE_HOME: fontCacheRoot }
+  });
+  if (/error opening font|failed to find any fallback with glyph|fontselect:.*failed/i.test(rendered.stderr)) {
     throw new Error(
       'Subtitle rendering could not resolve one or more glyphs. Add a CJK-capable font file under the project, set timeline.fontsDir to that project-relative directory, and set the caption font family.'
     );
   }
-  return picture;
+  if (!cacheFile) return picture;
+  cacheFileAtomically(picture, cacheFile);
+  return cacheFile;
 }
 
 function mixAudio(context, assembled, narration, music) {
@@ -763,7 +1143,24 @@ function loudnorm(context, input) {
   const normalized = path.join(buildDir, 'normalized.wav');
   const target = clamp(finite(timeline.output.loudnessLufs, -14), -70, -5);
   const peak = clamp(finite(timeline.output.truePeakDb, -1.5), -9, -0.1);
-  progress(`normalizing audio to ${target} LUFS / ${peak} dBTP`);
+  const mode = timeline._normalizationMode || 'two-pass';
+  progress(`normalizing audio to ${target} LUFS / ${peak} dBTP (${mode})`);
+  if (mode === 'single-pass') {
+    run(tools.ffmpeg, [
+      '-hide_banner', '-loglevel', 'warning', '-y', '-i', input,
+      '-af', `loudnorm=I=${target}:LRA=7:TP=${peak},aresample=48000`,
+      '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2',
+      normalized
+    ], { cwd: projectRoot });
+    return {
+      file: normalized,
+      stats: null,
+      passes: 1,
+      mode,
+      targetLufs: target,
+      targetTruePeakDb: peak
+    };
+  }
   const first = run(tools.ffmpeg, [
     '-hide_banner', '-nostats', '-i', input,
     '-af', `loudnorm=I=${target}:LRA=7:TP=${peak}:print_format=json`,
@@ -790,7 +1187,14 @@ function loudnorm(context, input) {
     '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2',
     normalized
   ], { cwd: projectRoot });
-  return { file: normalized, stats, targetLufs: target, targetTruePeakDb: peak };
+  return {
+    file: normalized,
+    stats,
+    passes: 2,
+    mode,
+    targetLufs: target,
+    targetTruePeakDb: peak
+  };
 }
 
 function muxFinal(context, picture, audio) {
@@ -865,6 +1269,13 @@ function lastNumber(text, pattern) {
 
 function inspectFinal(context, file) {
   const { timeline, tools, projectRoot } = context;
+  const validation = context.validation || timeline._validationLevel || 'full';
+  const checks = {
+    streams: true,
+    loudness: validation !== 'basic',
+    blackFrames: validation === 'full',
+    silence: validation !== 'basic'
+  };
   const result = run(tools.ffprobe, [
     '-v', 'error', '-show_format', '-show_streams', '-of', 'json', file
   ], { capture: true });
@@ -888,50 +1299,65 @@ function inspectFinal(context, file) {
   }
   if (!data.format || finite(data.format.size, 0) <= 0) errors.push('Output file is empty.');
 
-  const loudnessRun = run(tools.ffmpeg, [
-    '-hide_banner', '-nostats', '-i', file,
-    '-filter_complex', 'ebur128=peak=true',
-    '-f', 'null', '-'
-  ], { cwd: projectRoot, capture: true });
-  const loudnessText = `${loudnessRun.stdout}\n${loudnessRun.stderr}`;
-  const integratedLufs = lastNumber(loudnessText, /I:\s+(-?\d+(?:\.\d+)?)\s+LUFS/g);
-  const truePeakDbfs = lastNumber(loudnessText, /Peak:\s+(-?\d+(?:\.\d+)?)\s+dBFS/g);
+  let integratedLufs = null;
+  let truePeakDbfs = null;
   const targetLufs = finite(timeline.output.loudnessLufs, -14);
   const targetPeak = finite(timeline.output.truePeakDb, -1.5);
   const allowSilent = Boolean(timeline.audio && timeline.audio.allowSilent);
-  if (integratedLufs === null || truePeakDbfs === null) {
-    const message = 'Could not measure final integrated loudness and true peak.';
-    if (allowSilent) warnings.push(message);
-    else errors.push(message);
-  } else if (!allowSilent && Math.abs(integratedLufs - targetLufs) > 1) {
-    errors.push(`Integrated loudness ${integratedLufs} LUFS misses target ${targetLufs} LUFS by more than 1 LU.`);
-  }
-  if (truePeakDbfs !== null && truePeakDbfs > targetPeak + 0.6) {
-    errors.push(`True peak ${truePeakDbfs} dBFS exceeds target tolerance ${targetPeak + 0.6} dBFS.`);
+  if (checks.loudness) {
+    const loudnessRun = run(tools.ffmpeg, [
+      '-hide_banner', '-nostats', '-i', file,
+      '-vn', '-filter_complex', 'ebur128=peak=true',
+      '-f', 'null', '-'
+    ], { cwd: projectRoot, capture: true });
+    const loudnessText = `${loudnessRun.stdout}\n${loudnessRun.stderr}`;
+    integratedLufs = lastNumber(loudnessText, /I:\s+(-?\d+(?:\.\d+)?)\s+LUFS/g);
+    truePeakDbfs = lastNumber(loudnessText, /Peak:\s+(-?\d+(?:\.\d+)?)\s+dBFS/g);
+    if (integratedLufs === null || truePeakDbfs === null) {
+      const message = 'Could not measure final integrated loudness and true peak.';
+      if (allowSilent) warnings.push(message);
+      else errors.push(message);
+    } else {
+      const tolerance = validation === 'full' ? 1 : 1.5;
+      if (!allowSilent && Math.abs(integratedLufs - targetLufs) > tolerance) {
+        errors.push(`Integrated loudness ${integratedLufs} LUFS misses target ${targetLufs} LUFS by more than ${tolerance} LU.`);
+      }
+    }
+    if (truePeakDbfs !== null && truePeakDbfs > targetPeak + 0.6) {
+      errors.push(`True peak ${truePeakDbfs} dBFS exceeds target tolerance ${targetPeak + 0.6} dBFS.`);
+    }
   }
 
-  const blackRun = run(tools.ffmpeg, [
-    '-hide_banner', '-nostats', '-i', file,
-    '-vf', 'blackdetect=d=0.35:pix_th=0.10',
-    '-an', '-f', 'null', '-'
-  ], { cwd: projectRoot, capture: true });
-  const blackEvents = [...`${blackRun.stdout}\n${blackRun.stderr}`.matchAll(/black_start:([\d.]+) black_end:([\d.]+) black_duration:([\d.]+)/g)]
-    .map((match) => ({ start: Number(match[1]), end: Number(match[2]), duration: Number(match[3]) }));
-  if (blackEvents.length) warnings.push(`${blackEvents.length} black-frame interval(s) require visual review.`);
+  let blackEvents = [];
+  if (checks.blackFrames) {
+    const blackRun = run(tools.ffmpeg, [
+      '-hide_banner', '-nostats', '-i', file,
+      '-vf', 'blackdetect=d=0.35:pix_th=0.10',
+      '-an', '-f', 'null', '-'
+    ], { cwd: projectRoot, capture: true });
+    blackEvents = [...`${blackRun.stdout}\n${blackRun.stderr}`.matchAll(/black_start:([\d.]+) black_end:([\d.]+) black_duration:([\d.]+)/g)]
+      .map((match) => ({ start: Number(match[1]), end: Number(match[2]), duration: Number(match[3]) }));
+    if (blackEvents.length) warnings.push(`${blackEvents.length} black-frame interval(s) require visual review.`);
+  }
 
-  const silenceRun = run(tools.ffmpeg, [
-    '-hide_banner', '-nostats', '-i', file,
-    '-af', 'silencedetect=noise=-45dB:d=1.5',
-    '-vn', '-f', 'null', '-'
-  ], { cwd: projectRoot, capture: true });
-  const silenceEvents = [...`${silenceRun.stdout}\n${silenceRun.stderr}`.matchAll(/silence_start:\s*([\d.]+)|silence_end:\s*([\d.]+)/g)]
-    .map((match) => match[1]
-      ? { type: 'start', time: Number(match[1]) }
-      : { type: 'end', time: Number(match[2]) });
-  if (silenceEvents.length && !allowSilent) warnings.push(`${silenceEvents.length} silence boundary event(s) require review.`);
+  let silenceEvents = [];
+  if (checks.silence) {
+    const silenceRun = run(tools.ffmpeg, [
+      '-hide_banner', '-nostats', '-i', file,
+      '-af', 'silencedetect=noise=-45dB:d=1.5',
+      '-vn', '-f', 'null', '-'
+    ], { cwd: projectRoot, capture: true });
+    silenceEvents = [...`${silenceRun.stdout}\n${silenceRun.stderr}`.matchAll(/silence_start:\s*([\d.]+)|silence_end:\s*([\d.]+)/g)]
+      .map((match) => match[1]
+        ? { type: 'start', time: Number(match[1]) }
+        : { type: 'end', time: Number(match[2]) });
+    if (silenceEvents.length && !allowSilent) warnings.push(`${silenceEvents.length} silence boundary event(s) require review.`);
+  }
 
   return {
     ok: errors.length === 0,
+    level: validation,
+    checks,
     errors,
     warnings,
     duration,
@@ -961,6 +1387,16 @@ function makeProgress(options) {
   return (message) => process.stderr.write(`[qiaomu-cut] ${message}\n`);
 }
 
+function timedStage(context, name, operation) {
+  const started = process.hrtime.bigint();
+  try {
+    return operation();
+  } finally {
+    const seconds = Number(process.hrtime.bigint() - started) / 1e9;
+    context.timings[name] = Math.round(seconds * 100) / 100;
+  }
+}
+
 function renderProject(projectDir, options = {}) {
   const started = Date.now();
   const projectRoot = path.resolve(projectDir);
@@ -969,29 +1405,81 @@ function renderProject(projectDir, options = {}) {
   }
   const timelineRelative = options.timeline || 'timeline.json';
   const timelineFile = projectPath(projectRoot, timelineRelative, 'timeline', { exists: true });
-  const timeline = readJson(timelineFile);
+  const sourceTimeline = readJson(timelineFile);
+  const renderProfile = applyRenderProfile(sourceTimeline, options);
+  const timeline = renderProfile.timeline;
   validateTimeline(timeline, projectRoot, options);
   preflightProjectIO(collectProjectIO(timeline, projectRoot, timelineFile), options);
   const tools = inspectDependencies();
   const buildRoot = projectPath(projectRoot, '.qiaocut', 'internal build root');
-  fs.mkdirSync(buildRoot, { recursive: true });
-  assertPhysicalPathWithin(projectRoot, buildRoot, 'internal build root');
+  ensureInternalDirectory(projectRoot, buildRoot, 'internal build root');
+  const cacheBase = options.cache === false ? null : path.join(buildRoot, 'cache');
+  const cacheRoot = cacheBase ? path.join(cacheBase, 'segments') : null;
+  const ttsCacheRoot = cacheBase ? path.join(cacheBase, 'tts') : null;
+  const pictureCacheRoot = cacheBase ? path.join(cacheBase, 'pictures') : null;
+  if (cacheBase) {
+    for (const [directory, label] of [
+      [cacheRoot, 'segment cache'],
+      [ttsCacheRoot, 'narration cache'],
+      [pictureCacheRoot, 'picture cache']
+    ]) {
+      ensureInternalDirectory(projectRoot, directory, label);
+    }
+  }
   const buildDir = fs.mkdtempSync(path.join(buildRoot, 'render-'));
+  const fontCacheRoot = path.join(buildDir, 'fontconfig');
+  const fontFilesRoot = cacheBase ? path.join(cacheBase, 'fonts') : path.join(buildDir, 'fonts');
+  for (const [directory, label] of [
+    [fontCacheRoot, 'Fontconfig runtime cache'],
+    [fontFilesRoot, 'caption font cache root']
+  ]) {
+    ensureInternalDirectory(projectRoot, directory, label);
+  }
   const progress = makeProgress(options);
-  const context = { timeline, projectRoot, timelineFile, buildDir, tools, progress };
-  progress(`${tools.version}`);
+  const cacheStats = {
+    enabled: Boolean(cacheBase),
+    hits: 0,
+    misses: 0,
+    segments: { hits: 0, misses: 0 },
+    narration: { hits: 0, misses: 0 },
+    pictures: { hits: 0, misses: 0 }
+  };
+  const timings = {};
+  const context = {
+    timeline,
+    projectRoot,
+    timelineFile,
+    buildDir,
+    tools,
+    progress,
+    cacheRoot,
+    ttsCacheRoot,
+    pictureCacheRoot,
+    fontCacheRoot,
+    fontFilesRoot,
+    cacheStats,
+    timings,
+    profile: renderProfile.name,
+    validation: renderProfile.validation
+  };
+  progress(`${tools.version}; profile=${renderProfile.name}; validation=${renderProfile.validation}`);
   try {
-    const captions = prepareCaptions(context);
-    const music = prepareMusic(context);
-    const narration = prepareNarration(context);
-    const segments = timeline.shots.map((shot, index) => renderShot(context, shot, index));
-    const assembled = concatSegments(context, segments);
-    const picture = renderPicture(context, assembled, captions);
-    const mix = mixAudio(context, assembled, narration, music);
-    const normalized = loudnorm(context, mix);
-    const finalVideo = muxFinal(context, picture, normalized.file);
-    const sheet = contactSheet(context, finalVideo);
-    const verification = inspectFinal(context, finalVideo);
+    const captions = timedStage(context, 'captions', () => prepareCaptions(context));
+    const music = timedStage(context, 'music', () => prepareMusic(context));
+    const narration = timedStage(context, 'narration', () => prepareNarration(context));
+    const segments = timedStage(context, 'shots', () => timeline.shots.map((shot, index) => renderShot(context, shot, index)));
+    const assembled = timedStage(context, 'assemble', () => concatSegments(context, segments));
+    const picture = timedStage(context, 'picture', () => renderPicture(context, assembled, captions, segments));
+    const mix = timedStage(context, 'audioMix', () => mixAudio(context, assembled, narration, music));
+    const normalized = timedStage(context, 'normalization', () => loudnorm(context, mix));
+    const finalVideo = timedStage(context, 'mux', () => muxFinal(context, picture, normalized.file));
+    const sheet = timedStage(context, 'contactSheet', () => contactSheet(context, finalVideo));
+    const verification = timedStage(context, 'verification', () => inspectFinal(context, finalVideo));
+    const captionFontVerified = !captions ||
+      (context.resolvedCaptionFont && context.resolvedCaptionFont.source !== 'system-unverified');
+    if (!captionFontVerified) {
+      verification.warnings.push('Caption font resolution is system-unverified; configure fontsDir before release.');
+    }
     const reportPath = projectPath(
       projectRoot,
       (timeline.reports && timeline.reports.renderReport) || 'reports/render-report.json',
@@ -1001,6 +1489,9 @@ function renderProject(projectDir, options = {}) {
       ok: verification.ok,
       schema: timeline.schema,
       title: timeline.title || null,
+      profile: renderProfile.name,
+      releaseReady: renderProfile.name === 'final' && renderProfile.validation === 'full' &&
+        verification.ok && captionFontVerified,
       project: '.',
       timeline: path.relative(projectRoot, timelineFile),
       finalVideo: path.relative(projectRoot, finalVideo),
@@ -1011,13 +1502,21 @@ function renderProject(projectDir, options = {}) {
       fps: timeline.output.fps,
       shots: timeline.shots.length,
       captions: captions ? path.relative(projectRoot, captions) : null,
+      captionFont: captions && context.resolvedCaptionFont ? {
+        family: context.resolvedCaptionFont.family,
+        source: context.resolvedCaptionFont.source
+      } : null,
       narration: narration ? { engine: narration.engine, cues: narration.cues, voice: narration.voice } : null,
       music: music ? { mode: music.mode, file: path.relative(projectRoot, music.file), bpm: music.bpm || null, seed: music.seed || null } : null,
       loudness: {
         targetLufs: normalized.targetLufs,
         targetTruePeakDb: normalized.targetTruePeakDb,
+        mode: normalized.mode,
+        passes: normalized.passes,
         firstPass: normalized.stats
       },
+      cache: cacheStats,
+      timings,
       ffmpeg: tools.version,
       verification,
       elapsedSeconds: Math.round((Date.now() - started) / 100) / 10,
@@ -1041,7 +1540,7 @@ function renderProject(projectDir, options = {}) {
 }
 
 function parseArgs(argv) {
-  const options = { keepBuild: false, json: false, force: false, allowLarge: false };
+  const options = { keepBuild: false, json: false, force: false, allowLarge: false, cache: true };
   const positional = [];
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -1057,6 +1556,7 @@ function parseArgs(argv) {
     else if (token === '--keep-build') options.keepBuild = true;
     else if (token === '--force') options.force = true;
     else if (token === '--allow-large') options.allowLarge = true;
+    else if (token === '--no-cache') options.cache = false;
     else if (token === '--help') options.help = true;
     else if (token === '--timeline') {
       const value = argv[index + 1];
@@ -1066,6 +1566,20 @@ function parseArgs(argv) {
     } else if (token.startsWith('--timeline=')) {
       options.timeline = token.slice('--timeline='.length);
       if (!options.timeline) throw new UsageError('--timeline requires a project-relative path.');
+    } else if (['--profile', '--validation', '--output'].includes(token)) {
+      const value = argv[index + 1];
+      if (!value || value.startsWith('--')) throw new UsageError(`${token} requires a value.`);
+      options[token.slice(2)] = value;
+      index += 1;
+    } else if (token.startsWith('--profile=')) {
+      options.profile = token.slice('--profile='.length);
+      if (!options.profile) throw new UsageError('--profile requires a value.');
+    } else if (token.startsWith('--validation=')) {
+      options.validation = token.slice('--validation='.length);
+      if (!options.validation) throw new UsageError('--validation requires a value.');
+    } else if (token.startsWith('--output=')) {
+      options.output = token.slice('--output='.length);
+      if (!options.output) throw new UsageError('--output requires a project-relative path.');
     } else {
       throw new UsageError(`Unknown option: ${token}`);
     }
@@ -1075,11 +1589,14 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  return `Usage: render_project.js <project-dir> [--timeline timeline.json] [--json] [--keep-build] [--force] [--allow-large]
+  return `Usage: render_project.js <project-dir> [--profile preview|standard|final] [--validation basic|standard|full]
+       [--timeline timeline.json] [--output renders/file.mp4] [--no-cache]
+       [--json] [--keep-build] [--force] [--allow-large]
 
 Renders a qiaocut.timeline.v1 project with ffmpeg-full. All media and output paths
 inside the timeline must be relative to <project-dir>. Existing generated outputs
-are preserved unless --force is supplied.
+are preserved unless --force is supplied. The default profile remains final for
+backward compatibility; preview and standard use separate suffixed outputs.
 `;
 }
 
@@ -1122,6 +1639,8 @@ function cli(argv = process.argv.slice(2)) {
 }
 
 module.exports = {
+  applyRenderProfile,
+  ensureInternalDirectory,
   UsageError,
   inspectDependencies,
   parseArgs,

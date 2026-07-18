@@ -13,7 +13,7 @@ const { generateAss, readCaptions } = require('./renderers/ass');
 const { generateHtmlScene, sceneFromIr } = require('./renderers/html_scene');
 const { readAssets, makeLicenseReport } = require('./license_report');
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
 function displayPath(file) {
   if (!file || typeof file !== 'string') return file;
@@ -114,6 +114,11 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (token.startsWith('--')) {
+      const equals = token.indexOf('=');
+      if (equals > 2) {
+        flags[token.slice(2, equals)] = token.slice(equals + 1);
+        continue;
+      }
       const key = token.slice(2);
       const next = argv[i + 1];
       if (!next || next.startsWith('--')) {
@@ -484,40 +489,23 @@ async function commandScaffold(positional, flags) {
   writeOutput(irPath, JSON.stringify(ir, null, 2) + '\n', { force: Boolean(flags.force) }, 'QiaoCut IR');
   writeOutput(assetsPath, JSON.stringify({ assets: [] }, null, 2) + '\n', { force: Boolean(flags.force) }, 'Asset manifest');
   writeOutput(licensePath, makeLicenseReport([]), { force: Boolean(flags.force) }, 'License report');
-  writeOutput(readmePath, `# QiaoCut Project\n\nBrief: ${brief}\n\n## Commands\n\nAfter adding a project-relative timeline.json and its assets:\n\n\`\`\`bash\nnode ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json\nnode ~/.agents/skills/qiaomu-cut/scripts/qcut.js render . --json\nnode ~/.agents/skills/qiaomu-cut/scripts/qcut.js verify renders/final.mp4 --json\n\`\`\`\n`, { force: Boolean(flags.force) }, 'Project README');
+  writeOutput(readmePath, `# QiaoCut Project\n\nBrief: ${brief}\n\n## Commands\n\nAfter adding a project-relative timeline.json and its assets:\n\n\`\`\`bash\nnode ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json\nnode ~/.agents/skills/qiaomu-cut/scripts/qcut.js render . --profile preview --json\nnode ~/.agents/skills/qiaomu-cut/scripts/qcut.js render . --profile final --json\n\`\`\`\n`, { force: Boolean(flags.force) }, 'Project README');
   print({
     ok: true,
     project: root,
     files: [irPath, assetsPath, licensePath, readmePath],
-    next: 'Add licensed assets, refine qiaocut-ir.json, author timeline.json, then render and verify.'
+    next: 'Add licensed assets, refine qiaocut-ir.json, author timeline.json, iterate with preview, then render final once.'
   }, flags);
 }
 
-async function commandRender(positional, flags) {
-  const projectDir = positional[0];
-  if (!projectDir) {
-    throw new Error('Usage: qcut render <project-dir> [--timeline timeline.json] [--keep-build] [--force] [--allow-large] [--json]');
-  }
-
+async function commandRender(rawArgs) {
   const renderer = path.join(__dirname, 'render_project.js');
   if (!fs.existsSync(renderer)) {
     throw new Error(`Project renderer not found: ${renderer}`);
   }
 
-  const args = [renderer, path.resolve(projectDir)];
-  if (flags.timeline) args.push('--timeline', flags.timeline);
-  if (flags['keep-build']) args.push('--keep-build');
-  if (flags.force) args.push('--force');
-  if (flags['allow-large']) args.push('--allow-large');
-  if (flags.json) args.push('--json');
-
-  const result = childProcess.spawnSync(process.execPath, args, {
-    encoding: 'utf8',
-    stdio: flags.json ? ['ignore', 'pipe', 'inherit'] : 'inherit',
-    maxBuffer: 16 * 1024 * 1024
-  });
+  const result = childProcess.spawnSync(process.execPath, [renderer, ...rawArgs], { stdio: 'inherit' });
   if (result.error) throw result.error;
-  if (result.stdout) process.stdout.write(result.stdout);
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
@@ -551,7 +539,9 @@ Usage:
   qcut workflow list|show <id> [--json]
   qcut techniques [--json]
   qcut scaffold ./project --brief "一句话视频需求" [--force] [--json]
-  qcut render <project-dir> [--timeline timeline.json] [--keep-build] [--force] [--allow-large] [--json]
+  qcut render <project-dir> [--profile preview|standard|final] [--validation basic|standard|full]
+              [--timeline timeline.json] [--output renders/file.mp4] [--no-cache]
+              [--keep-build] [--force] [--allow-large] [--json]
   qcut license assets.json [--output license-report.md] [--force]
   qcut ass captions.json [--output subtitles.ass] [--force]
   qcut html-scene qiaocut-ir.json [--scene s01] [--output scene.html] [--force]
@@ -563,6 +553,8 @@ Notes:
   - 33tc pick/cut may consume account credits. Review the range first; --yes is explicit confirmation.
   - Prefer ffmpeg-full for ASS subtitles, overlays, and professional composition.
   - Render paths in timeline.json must stay inside the project directory.
+  - Preview is for fast iteration; only final+full is release-ready.
+  - Segment cache is project-local under .qiaocut/cache and can be bypassed with --no-cache.
   - Existing generated outputs are preserved unless --force is explicit.
 `);
 }
@@ -570,6 +562,7 @@ Notes:
 async function main() {
   const [command = 'help', ...rest] = process.argv.slice(2);
   if (command === '33tc') return command33tc(rest);
+  if (command === 'render') return commandRender(rest);
   const { flags, positional } = parseArgs(rest);
   if (command === 'help' || command === '--help' || command === '-h') return help();
   if (command === 'doctor') return commandDoctor(flags);
@@ -579,7 +572,6 @@ async function main() {
   if (command === 'workflow') return commandWorkflow(positional, flags);
   if (command === 'techniques') return commandTechniques(flags);
   if (command === 'scaffold') return commandScaffold(positional, flags);
-  if (command === 'render') return commandRender(positional, flags);
   if (command === 'license') return commandLicense(positional, flags);
   if (command === 'ass') return commandAss(positional, flags);
   if (command === 'html-scene') return commandHtmlScene(positional, flags);

@@ -3,6 +3,7 @@ name: qiaomu-cut
 description: |
   把一句话需求转成可复现、可验收视频工程的乔木智能剪辑导演。Use when the user asks to create, plan, edit, remix, explain, narrate, subtitle, animate, composite, or render a video; build English-learning movie mixes, person profiles, explainers, product launch videos, cinematic shorts, social clips, course/PPT videos, AI image-based videos, stock-footage stories, or multi-source montage. Routes across 33台词, ClipSeek/Pexels/Pixabay/open media, local files, AI-generated images, HTML/motion graphics, Manim-style explainers, ffmpeg-full rendering, subtitles, transitions, masks, and quality checks.
 metadata:
+  version: 0.3.0
   author: 向阳乔木
   copyright: Copyright (c) 向阳乔木
   x: https://x.com/vista8
@@ -49,9 +50,10 @@ metadata:
 2. **Source**：选择素材源。优先使用授权清晰、可记录来源的素材；账号/本地 App 只在用户已放入范围时使用。
 3. **Generate**：当素材不足时，可生成图片、SVG、网页、字幕样式、标题卡、图表或动画片段。
 4. **Direct**：为每个 scene 写 shot list：镜头目的、素材、运镜、转场、字幕、音效、节奏点。
-5. **Render**：把确定的镜头写入项目内 `timeline.json`，再选择 ffmpeg-full、HTML/HyperFrames-style、Motion/CSS/SVG、Manim、PPT/slide 或 composite。通用时间线项目用 `scripts/qcut.js render <project-dir> --json`。
-6. **Verify**：检查分辨率、时长、编码、黑帧/静音风险、字幕安全区、响度、素材许可记录，并查看 contact sheet；自动检查不能代替内容、构图和字幕语义审看。
-7. **Deliver**：交付 MP4、工程/IR、素材清单、license report、复现命令和剩余风险。用户需要人工拖拽精修时，可建议独立的 `joeseesun/qiaomu-cut` 浏览器编辑器；当前尚无自动工程互导时必须明确说明，不能假装已经打通。
+5. **Preview**：把确定的镜头写入项目内 `timeline.json`，先运行 `scripts/qcut.js render <project-dir> --profile preview --json`。查看预览成片，修正内容、字幕、节奏和构图；不要在每次小改动后直接跑 final。
+6. **Master**：内容锁定后按用途选择 `standard` 或 `final`。公开发布、客户终稿和归档使用 `--profile final`；日常内部交付可以使用 `--profile standard`。
+7. **Verify**：读取 render report 中与档位对应的检查结果，检查字幕安全区、素材许可记录，并查看可用的 contact sheet；自动检查不能代替内容、构图和字幕语义审看。`render` 已内置技术校验，完成后不要再机械调用一次 `qcut verify`。
+8. **Deliver**：交付 MP4、工程/IR、素材清单、license report、复现命令和剩余风险。用户需要人工拖拽精修时，可建议独立的 `joeseesun/qiaomu-cut` 浏览器编辑器；当前尚无自动工程互导时必须明确说明，不能假装已经打通。
 
 ## 工具优先级
 
@@ -59,9 +61,11 @@ metadata:
 - 搜索影视台词：`scripts/qcut.js 33tc search "台词" --json`。`pick`/`cut` 可能消耗账号积分；核对结果、时间范围和输出目录后，只有获得明确确认才传 `--yes`。
 - 搜索免费素材：`scripts/qcut.js clipseek "关键词" --type video --json`。
 - 生成剪辑计划：`scripts/qcut.js plan "用户的一句话需求" --json`。
-- 渲染时间线工程：`scripts/qcut.js render <project-dir> --json`。默认读取项目内 `timeline.json`，素材路径必须相对项目目录。
+- 快速迭代：`scripts/qcut.js render <project-dir> --profile preview --json`。Skill 默认先走这个档位。
+- 日常交付：`scripts/qcut.js render <project-dir> --profile standard --json`。
+- 正式终稿：`scripts/qcut.js render <project-dir> --profile final --json`。为向后兼容，省略 `--profile` 仍默认为 `final`。
 - 查看工作流：`scripts/qcut.js workflow list` 或 `scripts/qcut.js workflow show english-mix`。
-- 验证视频：`scripts/qcut.js verify /path/to/video.mp4 --json`。
+- 验证外部或移动后的视频：`scripts/qcut.js verify /path/to/video.mp4 --json`。不要对刚由 `qcut render` 生成的同一个文件重复运行。
 - macOS 安装/检查 ffmpeg-full：`scripts/bootstrap_macos.sh --check` 或 `scripts/bootstrap_macos.sh --install`。
 
 ## 素材源边界
@@ -85,7 +89,12 @@ metadata:
 - `doctor` 若发现缺少 `libass`、`drawtext`、`subtitles` 或 `overlay`，先引导执行 `scripts/bootstrap_macos.sh --install`；该脚本通过 Homebrew 安装 `ffmpeg-full`，但不擅自替换用户已有系统 ffmpeg。
 - 重要项目必须保留 `QiaoCut IR`，让用户能复盘和二次修改。
 - 时间线内所有读写路径必须是项目相对路径并通过物理路径检查；默认不覆盖已有输出，只有核对目标后才使用 `--force`。
-- v0.2 内置时间线渲染覆盖图片/视频构图、有限 Ken Burns 运镜、ASS、混音、响度和验收；HTML capture、Manim/PPT 直出、复杂遮罩/速度渐变/完整转场库按外部引擎路由，不能描述为已全部内置。
+- v0.3 内置 `preview` / `standard` / `final` 三档：preview 为 960 长边/24 fps 上限、basic 校验且默认无 contact sheet；standard 为 1280 长边/30 fps 上限、响度与静音校验；final 保留 timeline 原始输出参数、两遍响度、contact sheet 和 full 校验。只有 `final + full` 通过且字幕字体已验证才是 `releaseReady`。
+- 省略 `--profile` 仍默认 `final`，但 Skill 的工作流必须先 preview、内容锁定后才 final。不要为了“省时间”关闭路径、安全、no-clobber、输入存在性和基础流校验。
+- 项目缓存默认位于 `.qiaocut/cache/`，复用镜头片段、TTS 和字幕画面；只在排查缓存时使用 `--no-cache`。不要删除或覆盖原始素材。
+- 有字幕而未指定 `fontsDir` 时，可自动复用本机 Noto Sans CJK SC 到项目私有缓存。不得把本机字体加入 skill、Git 仓库、素材包或交付包；跨机器字体由项目方按许可证自行提供。
+- v0.3 的 60 秒 DIG 样片实测：原 final 71.6 秒；preview 冷缓存 27.7 秒、暖缓存 3.3 秒；standard 冷缓存（TTS 已暖）27.1 秒、暖缓存 4.1 秒；final/full 冷缓存（TTS 已暖）65.6 秒、暖缓存 8.5 秒。该数据只说明相同开发机的相对收益，不承诺其他机器速度。
+- HTML capture、Manim/PPT 直出、复杂遮罩/速度渐变/完整转场库仍按外部引擎路由，不能描述为已全部内置。
 
 ## 质量门
 
@@ -93,7 +102,8 @@ metadata:
 
 - 使用了哪些素材源，哪些是搜索素材，哪些是 AI 生成，哪些是用户本地素材。
 - 输出视频路径、分辨率、时长、编码和文件大小。
-- contact sheet、响度/峰值、黑帧与静音检查结果；涉及字幕时还要人工抽查安全区和中英文语义。
+- 最终交付报告中的 profile、validation、`releaseReady`、缓存命中和阶段耗时。
+- `final/full` 的 contact sheet、响度/峰值、黑帧与静音检查结果；涉及字幕时还要人工抽查安全区和中英文语义。preview/basic 只用于迭代，不能按发布终检报告。
 - 许可/来源记录路径。
 - 不能验证的能力写 `missing evidence`，不要把计划当事实。
 

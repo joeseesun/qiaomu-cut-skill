@@ -24,6 +24,21 @@ find_ffmpeg_full() {
   return 1
 }
 
+find_cjk_font() {
+  for candidate in \
+    "${HOME}/Library/Fonts/NotoSansCJKsc-Regular.otf" \
+    /Library/Fonts/NotoSansCJKsc-Regular.otf \
+    /opt/homebrew/share/fonts/NotoSansCJKsc-Regular.otf \
+    /usr/local/share/fonts/NotoSansCJKsc-Regular.otf
+  do
+    if [[ -f "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 check_ffmpeg() {
   local ffmpeg_bin
   if ! ffmpeg_bin="$(find_ffmpeg_full)"; then
@@ -52,18 +67,37 @@ check_ffmpeg() {
   return "${missing}"
 }
 
+check_caption_font() {
+  local font_file
+  if ! font_file="$(find_cjk_font)"; then
+    echo "missing: Noto Sans CJK SC (required for deterministic Chinese subtitles)"
+    return 1
+  fi
+  echo "caption font: ${font_file}"
+}
+
+check_all() {
+  local missing=0
+  check_ffmpeg || missing=1
+  check_caption_font || missing=1
+  return "${missing}"
+}
+
 install_ffmpeg_full() {
   if ! command -v brew >/dev/null 2>&1; then
     echo "Homebrew not found. Install Homebrew first: https://brew.sh"
     return 1
   fi
   brew install ffmpeg-full
-  check_ffmpeg
+  if ! find_cjk_font >/dev/null; then
+    brew install --cask font-noto-sans-cjk-sc
+  fi
+  check_all
 }
 
 case "${MODE}" in
   --check|check)
-    check_ffmpeg
+    check_all
     ;;
   --install|install)
     install_ffmpeg_full

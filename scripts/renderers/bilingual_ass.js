@@ -170,6 +170,7 @@ function generateBilingualAss(document, options = {}) {
   validateEvents(events);
   const renderingDocument = {
     ...document,
+    font: options.font || document.font,
     width: number(options.width, document.width || 1080),
     height: number(options.height, document.height || 1920)
   };

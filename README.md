@@ -14,7 +14,7 @@
 
 qiaomu-cut 把这些拆成一个可复用的视频导演系统：它先生成 `QiaoCut IR`，再按环境路由到 33台词、ClipSeek/Pexels/Pixabay、本地素材、AI 图片生成、HTML/Manim/PPT 等可用引擎，最终由 ffmpeg-full 合成。
 
-v0.2 已真实实现的是：项目时间线渲染、图片/视频取景、有限 Ken Burns 运镜、三层双语 ASS、macOS 旁白、确定性程序音乐、原声混合/ducking、两遍响度、contact sheet 和技术验收。HTML 视频捕获、Manim/PPT 直出、复杂遮罩、速度渐变和完整转场库目前是工作流接口与扩展方向，不冒充已经全部内置。
+v0.3 已真实实现的是：项目时间线渲染、图片/视频取景、有限 Ken Burns 运镜、三层双语 ASS、macOS 旁白、确定性程序音乐、原声混合/ducking、`preview` / `standard` / `final` 三档渲染、分层验收和项目内内容寻址缓存。HTML 视频捕获、Manim/PPT 直出、复杂遮罩、速度渐变和完整转场库目前是工作流接口与扩展方向，不冒充已经全部内置。
 
 它不是承诺“魔法般永远一键完美”，而是把专业视频制作流程变成 agent 能执行、能验证、能继续扩展的工程。
 
@@ -52,8 +52,8 @@ node ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json
 2. 搜索或整理素材：33台词、ClipSeek、Pexels/Pixabay 原站、本地文件、AI 生成图、网页/信息源。
 3. 设计专业镜头：推拉摇移、匹配剪辑、J/L cut、遮罩、字幕跟随、标题卡、动态图形。
 4. 选择渲染引擎：ffmpeg-full、HTML/HyperFrames-style、Motion/CSS/SVG、Manim、PPT/slide、composite。
-5. 执行通用时间线渲染，并输出成片、contact sheet 和渲染报告。
-6. 输出质检信息：分辨率、时长、编码、音频、素材来源、许可状态和 `missing evidence`。
+5. 先用 `preview` 快速迭代，内容锁定后再用 `standard` 或 `final` 渲染。
+6. 输出与档位匹配的成片、contact sheet、缓存命中、阶段耗时和质检信息。
 
 ## 前置条件
 
@@ -113,13 +113,49 @@ node scripts/qcut.js plan "做一个 60 秒挖掘机英语启蒙视频" --workfl
 node scripts/qcut.js scaffold ./excavator-video --brief "做一个 60 秒挖掘机英语启蒙视频" --json
 ```
 
-填好项目内 `timeline.json` 后执行完整渲染：
+填好项目内 `timeline.json` 后，先执行快速预览：
 
 ```bash
-node scripts/qcut.js render ./excavator-video --json
+node scripts/qcut.js render ./excavator-video --profile preview --json
 ```
 
-`render` 默认读取 `<project-dir>/timeline.json`；也可用 `--timeline alternate-timeline.json`。时间线里的素材、字幕、旁白和输出路径必须是项目相对路径，渲染器会同时检查词法路径与软链接物理路径。已有输出默认保留；确认目标均为可替换的生成物后，才加 `--force`。调试时可加 `--keep-build` 保留本次唯一构建目录。
+确认内容、字幕、节奏和构图后再生成正式成片：
+
+```bash
+node scripts/qcut.js render ./excavator-video --profile final --json
+```
+
+`render` 默认读取 `<project-dir>/timeline.json`；也可用 `--timeline alternate-timeline.json`。为兼容 v0.2，省略 `--profile` 仍等价于 `--profile final`，不会悄悄降低既有项目的输出质量。时间线里的素材、字幕、旁白和输出路径必须是项目相对路径，渲染器会同时检查词法路径与软链接物理路径。已有输出默认保留；确认目标均为可替换的生成物后，才加 `--force`。调试时可加 `--keep-build` 保留本次唯一构建目录。
+
+### 三档性能工作流
+
+| 档位 | 默认渲染策略 | 默认校验 | 适合场景 |
+|---|---|---|---|
+| `preview` | 长边不超过 960、最高 24 fps、`ultrafast`、单遍响度；不生成 contact sheet | `basic`：流、尺寸、帧率、时长、像素格式、空文件 | 反复调整素材、字幕、节奏和构图 |
+| `standard` | 长边不超过 1280、最高 30 fps、`veryfast`、单遍响度；最多 8 帧 contact sheet | `standard`：`basic` + 最终响度/峰值 + 静音扫描 | 内部审阅、日常快速交付 |
+| `final` | timeline 原始尺寸/帧率和既定编码参数、两遍响度、完整 contact sheet | `full`：`standard` + 全片黑场扫描 | 公开发布、归档、客户终稿 |
+
+只有 `profile=final`、`validation=full`、技术校验通过，且字幕字体不是 `system-unverified` 时，渲染报告的 `releaseReady` 才会是 `true`。`--validation basic|standard|full` 可以用于诊断，但一般不要把较弱校验与正式发布混用。
+
+非 `final` 档会使用独立文件名，例如 `renders/final.preview.mp4`、`renders/final.standard.mp4`，对应字幕和报告也带档位后缀，不会覆盖正式成片。`--output` 可指定新的项目相对输出路径。
+
+### 项目内缓存
+
+默认缓存位于 `<project>/.qiaocut/cache/`，复用未变化的镜头片段、macOS TTS 和已烧录字幕的画面；缓存键包含素材指纹、时间线参数、渲染档位和 ffmpeg 版本。渲染报告会记录 `cache.hits`、`cache.misses` 和逐阶段 `timings`。排查缓存问题时可临时使用 `--no-cache`，平时不要主动关闭缓存。
+
+同一台开发机上的 60 秒 DIG 双语样片实测如下，结果仅用于比较档位和冷热缓存，不是跨机器速度承诺：
+
+| 场景 | 耗时 |
+|---|---:|
+| v0.2 原始 `final` | 71.6 秒 |
+| v0.3 `preview` 冷缓存 | 27.7 秒 |
+| v0.3 `preview` 暖缓存 | 3.3–4.1 秒 |
+| v0.3 `standard` 冷缓存（TTS 已暖） | 27.1 秒 |
+| v0.3 `standard` 暖缓存 | 4.1 秒 |
+| v0.3 `final/full` 冷缓存（TTS 已暖） | 65.6 秒 |
+| v0.3 `final/full` 暖缓存 | 8.5 秒 |
+
+`qcut render` 已在内部执行与档位对应的技术校验并写入 render report。渲染后不要机械地再运行一次 `qcut verify`；该命令保留给外部生成、移动后或单独收到的视频文件。
 
 生成 ASS 字幕和 HTML 场景：
 
@@ -141,7 +177,7 @@ node scripts/qcut.js workflow list
 node scripts/qcut.js workflow show english-mix --json
 ```
 
-验证视频：
+验证外部生成、移动后或单独收到的视频：
 
 ```bash
 node scripts/qcut.js verify ./final.mp4 --json
@@ -156,6 +192,8 @@ node scripts/qcut.js verify ./final.mp4 --json
 3. 注释层：词义、语境、音标或素材来源，放在顶部安全区。
 
 三层不是所有视频的硬性模板。中文人物片、无旁白氛围片等项目应按内容删减层级。最终要从 contact sheet 和关键帧人工检查字号、遮挡、安全区与译文语义。
+
+有 `fontsDir` 时优先使用项目指定字体；没有时，渲染器会自动查找本机已安装的 Noto Sans CJK SC，并仅复制到项目私有的 `.qiaocut/cache/fonts/` 供本机渲染。skill、Git 仓库和发布包不会捆绑、上传或再分发本机字体。若项目必须跨机器复现，应由项目维护者自行选择具有再分发许可的字体并遵守其许可证。
 
 ## 样例输出
 
@@ -177,7 +215,7 @@ node scripts/qcut.js verify ./final.mp4 --json
       "quality-report.json"
     ]
   },
-  "gates": ["doctor", "source manifest", "license report", "video verify"]
+  "gates": ["doctor", "source manifest", "license report", "profile-aware render verification"]
 }
 ```
 
@@ -215,14 +253,15 @@ node scripts/qcut.js verify ./final.mp4 --json
 
 ## 渲染与验收边界
 
-`qcut render` 负责把已经准备好的项目时间线合成为成片，并生成 contact sheet 与 render report。它不是“任意素材一键必然完美”的承诺：事实准确性、影视素材权利、字幕语义、人物肖像、审美取舍和平台规则仍需针对具体项目复核。
+`qcut render` 负责把已经准备好的项目时间线合成为成片，并按档位生成 contact sheet、render report 和技术校验。它不是“任意素材一键必然完美”的承诺：事实准确性、影视素材权利、字幕语义、人物肖像、审美取舍和平台规则仍需针对具体项目复核。
 
 建议交付门如下：
 
 - `doctor` 通过，确认 ffmpeg-full 具备 ASS/字幕、overlay、drawtext 等能力；缺失时运行 `scripts/bootstrap_macos.sh --install`，由 Homebrew 自动下载安装，但不会强制替换系统 ffmpeg。
 - 每个外部素材在 `assets-manifest.json` 中记录 provider、source page 和许可状态；ClipSeek 结果回原站核验。
-- `render` 成功返回最终视频、contact sheet 和 render report 路径。
-- `verify` 检查流、时长、编码和音频；项目级严格报告继续检查响度/峰值、黑帧、静音、字幕安全区，并人工抽看关键帧。
+- Skill 默认先执行 `preview`；确认内容与视觉后再执行一次 `final`。`standard` 用于不需要母版级编码但仍要响度、静音和 contact sheet 的日常交付。
+- `render` 成功返回视频、可选 contact sheet 和 render report；报告明确列出 profile、validation、缓存和逐阶段耗时。
+- `render` 已包含对应档位校验，不再重复调用独立 `verify`。`final/full` 继续检查响度/峰值、黑帧和静音，并人工抽看 contact sheet；`preview/basic` 通过不代表可以公开发布。
 
 ## 配套浏览器编辑器
 
@@ -246,7 +285,7 @@ qiaomu-cut 借鉴这些公开项目的方法和思想，不复制其私有内容
 | `missing filter: subtitles` | 当前 ffmpeg 不是 full build | 运行 `scripts/bootstrap_macos.sh --install`，或设置 `QIAOMU_FFMPEG` |
 | ClipSeek 搜索有结果但不能直接下载 | ClipSeek 返回的是原站页面 | 打开 `sourcePage`，在 Pexels/Pixabay 等原站确认下载和许可 |
 | 33台词不可用 | 本机未安装 App、未登录或 `33tc` CLI 未链接 | 先打开 33台词 App 登录，再检查 `33tc search` |
-| 生成视频没有声音 | 输入素材无音轨或混音计划未执行 | 用 `qcut verify final.mp4 --json` 检查 audio stream |
+| 生成视频没有声音 | 输入素材无音轨或混音计划未执行 | 先读本次 render report 的 `verification.audio`；仅外部视频才单独运行 `qcut verify` |
 | README 发布检查失败 | YAML/占位符/缺少章节 | 运行 `python3 scripts/validate_skill.py .` 按报告修复 |
 
 ## 风险和边界

@@ -1,5 +1,5 @@
 name: qiaomu-cut
-version: 0.2.0
+version: 0.3.0
 mode: governed
 summary: 一句话生成专业视频的乔木智能剪辑导演
 owner:
@@ -52,12 +52,15 @@ inputs:
       aspect: "9:16 | 16:9 | 1:1 | 21:9"
       durationSeconds: number
       platform: "douyin | xiaohongshu | tiktok | youtube | course | custom"
+      profile: "preview | standard | final"
 
 outputs:
   - qiaocut-ir.json
   - assets-manifest.json
   - license-report.md
   - quality-report.json
+  - final.preview.mp4
+  - final.standard.mp4
   - final.mp4
 
 commands:
@@ -72,10 +75,16 @@ commands:
     description: 生成 QiaoCut IR 草案
   verify:
     run: node scripts/qcut.js verify /path/to/video.mp4 --json
-    description: 验证视频文件
-  render:
-    run: node scripts/qcut.js render /path/to/project --json
-    description: 渲染 qiaocut.timeline.v1；默认不覆盖已有输出，覆盖需显式 --force
+    description: 验证外部生成、移动后或单独收到的视频；qcut render 已内置对应档位校验，不重复执行
+  render_preview:
+    run: node scripts/qcut.js render /path/to/project --profile preview --json
+    description: Skill 默认第一步；960 长边/24 fps 上限、basic 校验、单遍响度、无 contact sheet
+  render_standard:
+    run: node scripts/qcut.js render /path/to/project --profile standard --json
+    description: 日常交付；1280 长边/30 fps 上限、响度/峰值/静音校验和最多 8 帧 contact sheet
+  render_final:
+    run: node scripts/qcut.js render /path/to/project --profile final --json
+    description: 正式终稿；timeline 原始输出、两遍响度、full 校验和 contact sheet；省略 profile 仍默认 final
   33tc:
     run: node scripts/qcut.js 33tc search "台词" --json
     description: 委托独立安装且获授权的 33tc CLI；pick/cut 可能耗积分，必须显式确认
@@ -111,6 +120,39 @@ trust_boundary:
     - printing secrets, cookies, tokens, or private account data
     - claiming provider license without source-page evidence
     - redistributing 33TaiCi private protocols as part of this public skill
+    - bundling, uploading, or redistributing fonts discovered on the user's machine
+
+performance_workflow:
+  default_cli_profile: final
+  skill_sequence:
+    - render preview for content, caption, pacing, and composition iteration
+    - render standard only for internal or speed-sensitive delivery
+    - render final once content is locked and release evidence is required
+  cache:
+    path: .qiaocut/cache
+    enabled_by_default: true
+    reusable_artifacts:
+      - shot segments
+      - macOS narration cues
+      - captioned picture master
+      - private local caption-font copy
+    bypass: --no-cache
+  validation:
+    preview: basic stream, duration, dimensions, frame-rate, pixel-format, and non-empty-file checks
+    standard: preview checks plus final loudness, true peak, and silence boundaries
+    final: standard checks plus full black-frame scan
+    release_ready: only final + full + verification pass + verified caption font when captions exist
+  font_policy: Prefer project fontsDir; otherwise reuse an installed local Noto Sans CJK SC only inside the private project cache and never distribute it.
+  measured_baseline:
+    fixture: 60-second DIG bilingual demo on the development Mac
+    legacy_final_seconds: 71.6
+    preview_cold_seconds: 27.7
+    preview_warm_seconds: 3.3-4.1
+    standard_cold_seconds_tts_warm: 27.1
+    standard_warm_seconds: 4.1
+    final_cold_seconds_tts_warm: 65.6
+    final_warm_seconds: 8.5
+  no_duplicate_verify: Do not invoke qcut verify immediately after a successful qcut render of the same file.
 
 release_gate:
   required:
@@ -119,6 +161,7 @@ release_gate:
     - qcut doctor
     - README review
     - secret scan before GitHub publish
+    - final profile with full validation and releaseReady true for release video fixtures
   missing_evidence:
     - end-to-end render fixtures for every workflow
     - provider-backed download adapters beyond ClipSeek discovery

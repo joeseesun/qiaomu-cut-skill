@@ -1,6 +1,6 @@
 {
   "name": "qiaomu-cut",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "mode": "Governed",
   "owner": {
     "name": "向阳乔木",
@@ -29,6 +29,8 @@
       "source adapters",
       "shot and motion design",
       "renderer selection",
+      "profile-based preview and mastering",
+      "content-addressed render cache",
       "quality gates",
       "delivery reports"
     ],
@@ -55,6 +57,78 @@
       "hybrid-studio"
     ]
   },
+  "performanceWorkflow": {
+    "defaultCliProfile": "final",
+    "skillDefaultSequence": [
+      "preview for content, caption, pacing, and composition iteration",
+      "standard only for internal or speed-sensitive delivery",
+      "final once content is locked and release evidence is required"
+    ],
+    "profiles": {
+      "preview": {
+        "maxDimension": 960,
+        "maxFps": 24,
+        "normalization": "single-pass",
+        "validation": "basic",
+        "contactSheet": false
+      },
+      "standard": {
+        "maxDimension": 1280,
+        "maxFps": 30,
+        "normalization": "single-pass",
+        "validation": "standard",
+        "contactSheet": "up to 8 frames"
+      },
+      "final": {
+        "dimensionsAndFps": "timeline-native",
+        "normalization": "two-pass",
+        "validation": "full",
+        "contactSheet": true
+      }
+    },
+    "validation": {
+      "always": [
+        "timeline and time-bound consistency",
+        "path and symlink containment",
+        "input-output alias and no-clobber checks",
+        "resource safety limits",
+        "stream, duration, dimensions, frame-rate, pixel-format, and non-empty output"
+      ],
+      "standardAdds": [
+        "integrated loudness",
+        "true peak",
+        "silence boundaries"
+      ],
+      "fullAdds": [
+        "full black-frame scan"
+      ],
+      "releaseReady": "only final + full + verification pass + verified caption font when captions exist",
+      "duplicateVerify": "Do not run standalone qcut verify after qcut render succeeds for the same output."
+    },
+    "cache": {
+      "path": ".qiaocut/cache",
+      "enabledByDefault": true,
+      "artifacts": [
+        "shot segments",
+        "macOS narration cues",
+        "captioned picture masters",
+        "private local caption-font copies"
+      ],
+      "bypass": "--no-cache"
+    },
+    "fontPolicy": "Prefer project fontsDir; otherwise reuse an installed local Noto Sans CJK SC only in the private project cache. Never bundle, upload, or redistribute a font discovered on the user's machine.",
+    "measuredBaseline": {
+      "fixture": "60-second DIG bilingual demo on the development Mac",
+      "legacyFinalSeconds": 71.6,
+      "previewColdSeconds": 27.7,
+      "previewWarmSeconds": "3.3-4.1",
+      "standardColdSecondsTtsWarm": 27.1,
+      "standardWarmSeconds": 4.1,
+      "finalColdSecondsTtsWarm": 65.6,
+      "finalWarmSeconds": 8.5,
+      "scope": "same-machine relative measurements, not a cross-machine performance guarantee"
+    }
+  },
   "trust": {
     "readsLocalAccountState": "only through an independently installed 33tc adapter when invoked",
     "printsSecrets": false,
@@ -74,7 +148,10 @@
       "ffmpeg-full doctor",
       "QiaoCut IR plan generator",
       "video ffprobe verifier",
-      "qiaocut.timeline.v1 renderer with bilingual ASS, deterministic score, macOS narration, ducking, two-pass loudness, contact sheet, strict path boundary, and technical verification",
+      "qiaocut.timeline.v1 renderer with preview/standard/final profiles, layered validation, bilingual ASS, deterministic score, macOS narration, ducking, one- or two-pass loudness, contact sheet, strict path boundary, and technical verification",
+      "project-local content-addressed cache for shot segments, narration cues, and captioned picture masters",
+      "automatic reuse of an installed local Noto Sans CJK SC through private project cache without font redistribution",
+      "measured 60-second DIG performance evidence for cold and warm preview/standard/final renders",
       "external 33tc adapter delegation without bundled private protocol",
       "trigger eval script",
       "skill validation script"
@@ -93,6 +170,7 @@
       "python3 scripts/validate_skill.py .",
       "python3 scripts/trigger_eval.py . --cases evals/trigger_cases.json --output reports/trigger-eval.json",
       "node scripts/qcut.js doctor --json",
+      "final-profile fixture render with full validation and releaseReady=true",
       "secret scan",
       "skill-publisher dry run"
     ]
