@@ -36,7 +36,11 @@ function main() {
   fs.writeFileSync(outsideSecret, 'do-not-read');
   fs.writeFileSync(fake33tc, `#!/usr/bin/env node
 const fs = require('fs');
-fs.appendFileSync(process.env.FAKE_33TC_LOG, JSON.stringify(process.argv.slice(2)) + '\\n');
+fs.appendFileSync(${JSON.stringify(fake33tcLog)}, JSON.stringify({
+  args: process.argv.slice(2),
+  listenhubApiKeyPresent: Boolean(process.env.LISTENHUB_API_KEY),
+  githubTokenPresent: Boolean(process.env.GITHUB_TOKEN || process.env.GH_TOKEN)
+}) + '\\n');
 process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-token', mediaUrl: 'https://private.example.test/file.mp4?sig=secret' }));
 `, { mode: 0o700 });
 
@@ -141,7 +145,8 @@ process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-to
     const fake33tcEnvironment = {
       ...process.env,
       QIAOMU_33TC_CLI: fake33tc,
-      FAKE_33TC_LOG: fake33tcLog
+      LISTENHUB_API_KEY: 'synthetic-listenhub-secret',
+      GITHUB_TOKEN: 'synthetic-github-secret'
     };
     const unconfirmed33tc = childProcess.spawnSync(
       process.execPath,
@@ -166,6 +171,9 @@ process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-to
     assert(!confirmed33tc.stdout.includes('opaque-33tc-token'));
     assert(confirmed33tc.stdout.includes('clip-fixture'));
     assert.equal(fs.existsSync(fake33tcLog), true);
+    const confirmed33tcCall = JSON.parse(fs.readFileSync(fake33tcLog, 'utf8').trim());
+    assert.equal(confirmed33tcCall.listenhubApiKeyPresent, false);
+    assert.equal(confirmed33tcCall.githubTokenPresent, false);
     const planned = childProcess.spawnSync(
       process.execPath,
       [qcut, 'plan', '做一个唐代李白水墨人物中文讲解视频，忧郁但有希望', '--json'],
@@ -219,7 +227,7 @@ process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-to
     assert(!ass.includes('\nDialogue: injected'));
     assert(ass.includes('\\c&H0042B9F4&'));
 
-    process.stdout.write(`${JSON.stringify({ ok: true, checks: 37 }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ ok: true, checks: 39 }, null, 2)}\n`);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { projectPath } = require('./render_project');
-const { hashFile, importAsset } = require('./ingest_asset');
+const { importAsset } = require('./ingest_asset');
 const { inferredProvenance, validateSignature } = require('./fetch_generated');
 const { executeListenHub, redactSecrets } = require('./adapters/listenhub');
 

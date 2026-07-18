@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { sanitizeOutput } = require('./listenhub');
+const { minimalEnvironment, sanitizeOutput } = require('./listenhub');
 
 function executable(file) {
   if (!file) return null;
@@ -49,6 +49,7 @@ function main(argv = process.argv.slice(2)) {
   }
   const result = spawnSync(adapter, argv, {
     encoding: 'utf8',
+    env: minimalEnvironment(),
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['inherit', 'pipe', 'pipe']
   });

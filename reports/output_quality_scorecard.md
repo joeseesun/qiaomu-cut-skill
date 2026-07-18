@@ -68,4 +68,4 @@ node scripts/qcut.js render /path/to/project --profile final --json
 
 ## missing evidence
 
-当前证据覆盖一个 60 秒 `hybrid-studio + english-mix` 真实项目、preview/standard 冷暖性能基准、一个 1.208333 秒真实 file-narration renderer/provenance/tamper smoke fixture、37 项核心安全测试，以及 182 项动态计数的 ListenHub mock/安全门测试；未执行付费 provider 生成，也没有 provider 数据保留/训练使用证据。仍未覆盖所有工作流、平台、外部引擎与 clean-host 字体环境。每个真实项目仍应单独生成本项目的 scorecard。
+当前证据覆盖一个 60 秒 `hybrid-studio + english-mix` 真实项目、preview/standard 冷暖性能基准、一个 1.208333 秒真实 file-narration renderer/provenance/tamper smoke fixture、39 项核心安全测试，以及 182 项动态计数的 ListenHub mock/安全门测试；未执行付费 provider 生成，也没有 provider 数据保留/训练使用证据。仍未覆盖所有工作流、平台、外部引擎与 clean-host 字体环境。每个真实项目仍应单独生成本项目的 scorecard。
