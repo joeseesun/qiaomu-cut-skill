@@ -16,5 +16,13 @@
     "symlinks": 7,
     "bytes": 1675008,
     "contentDigest": "7836c7873c5bc214d4cca256dc2460a9ba46b66eb0f49af3d42664ee638d91aa"
+  },
+  "distributionLayout": {
+    "reason": "npx skills add 1.5.19 dereferences the seven internal shared-directory symlinks during installation; this is the separately locked expanded layout, not a relaxed source check",
+    "entries": 113,
+    "files": 113,
+    "symlinks": 0,
+    "bytes": 1839669,
+    "contentDigest": "cf59c440381af19f220c3fc57e88702199cf77984cf94d692716a1eafd3eefeb"
   }
 }
