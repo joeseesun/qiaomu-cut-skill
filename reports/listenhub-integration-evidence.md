@@ -25,9 +25,9 @@ Owner: 向阳乔木
 
 ## Evidence
 
-- `file-backed fixture`: 78 upstream entries, 71 files, 7 internal symlinks, 1,675,008 bytes.
+- `file-backed fixture`: Git source layout is 78 upstream entries, 71 files, 7 internal symlinks and 1,675,008 bytes. `npx skills add` dereferences those links into a separately locked 113-file, 1,839,669-byte installation layout.
 - Upstream lock: commit `957774057d11fb57ffaf0262b0fba93b87da4933`, tree `257163ba0095d92d3f7aee87836345834123b339`.
-- Vendor integrity script checks the exact content digest and rejects escaping symlinks.
+- Vendor integrity script checks the exact content digest for either the Git source layout or the deterministic installer-expanded layout, and rejects escaping source symlinks or any third layout.
 - Local ListenHub npm package detected as `@marswave/listenhub-cli@0.0.15`; its CLI protocol reports `listenhub --version` = `0.1.0`. Image, video, TTS, music, podcast, explainer, slides, content extraction, Voice and PixVerse help routes were detected without a paid call.
 - Credential-stripped local help inspection confirmed `listenhub openapi speakers list --language zh -j` and direct-binary `listenhub openapi tts --text ... --voice <speakerId> --output <file> --format mp3`. The locked TTS route has no `create` subcommand, no `--json` flag and no verified estimate route. No real speaker-list or TTS request was made.
 - Local Coli package detected as `@marswave/coli@0.0.20`; the `coli asr` route is available.

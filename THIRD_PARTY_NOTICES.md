@@ -15,6 +15,10 @@ unmodified and reference-only. Qiaomu-specific adapters, safety gates, asset
 ingestion, documentation, and tests outside that directory are original
 integration work under this repository's license.
 
+The repository preserves the upstream Git symlinks. Installers that
+dereference the seven internal shared-directory links are covered by a second,
+exact expanded-layout fingerprint in the upstream lock file.
+
 The MIT license covers the upstream repository contents. It does not grant
 rights to the ListenHub service, third-party models, trademarks, uploaded
 source media, or generated content. ListenHub is a third-party service and is

@@ -38,8 +38,8 @@ function inventory(directory, root = directory, entries = []) {
   return entries;
 }
 
-function snapshotReport() {
-  const entries = inventory(VENDOR).sort((left, right) => left.path.localeCompare(right.path));
+function snapshotReport(directory = VENDOR) {
+  const entries = inventory(directory).sort((left, right) => left.path.localeCompare(right.path));
   const canonical = entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n';
   return {
     entries: entries.length,
@@ -50,6 +50,12 @@ function snapshotReport() {
   };
 }
 
+function snapshotFailures(actual, expected) {
+  return Object.keys(actual)
+    .filter((key) => actual[key] !== expected[key])
+    .map((key) => `${key}: expected ${expected[key]}, found ${actual[key]}`);
+}
+
 function main() {
   const actual = snapshotReport();
   if (process.argv.includes('--print-digest')) {
@@ -57,16 +63,25 @@ function main() {
     return;
   }
   const lock = JSON.parse(fs.readFileSync(LOCK, 'utf8'));
-  const expected = lock.snapshot;
-  const failures = Object.keys(actual)
-    .filter((key) => actual[key] !== expected[key])
-    .map((key) => `${key}: expected ${expected[key]}, found ${actual[key]}`);
+  const layouts = [
+    { name: 'git-source', expected: lock.snapshot },
+    { name: 'dereferenced-installer', expected: lock.distributionLayout }
+  ].filter((layout) => layout.expected);
+  const attempts = layouts.map((layout) => ({
+    name: layout.name,
+    failures: snapshotFailures(actual, layout.expected)
+  }));
+  const match = attempts.find((attempt) => attempt.failures.length === 0);
+  const failures = match
+    ? []
+    : attempts.flatMap((attempt) => attempt.failures.map((failure) => `${attempt.name}: ${failure}`));
   const report = {
-    ok: failures.length === 0,
+    ok: Boolean(match),
     repository: lock.repository,
     commit: lock.commit,
     tree: lock.tree,
     isolation: lock.isolation,
+    layout: match ? match.name : null,
     actual,
     failures
   };
@@ -74,6 +89,6 @@ function main() {
   process.exitCode = report.ok ? 0 : 1;
 }
 
-module.exports = { inventory, snapshotReport };
+module.exports = { inventory, snapshotReport, snapshotFailures };
 
 if (require.main === module) main();
