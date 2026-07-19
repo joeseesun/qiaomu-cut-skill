@@ -57,7 +57,7 @@ function renderText(text, style, highlightColor) {
   }).join('');
 }
 
-function expandCues(cues) {
+function expandCues(cues, options = {}) {
   const events = [];
   for (const cue of cues || []) {
     const common = {
@@ -68,7 +68,7 @@ function expandCues(cues) {
     if (cue.english) events.push({ ...common, layer: 2, style: cue.englishStyle || 'English', text: cue.english });
     if (cue.chinese) events.push({ ...common, layer: 1, style: cue.chineseStyle || 'Chinese', text: cue.chinese });
     if (cue.note) events.push({ ...common, layer: 0, style: cue.noteStyle || 'Note', text: cue.note });
-    if (cue.source) events.push({ ...common, layer: 3, style: 'Source', text: cue.source });
+    if (cue.source && options.showSource === true) events.push({ ...common, layer: 3, style: 'Source', text: cue.source });
   }
   return events;
 }
@@ -81,8 +81,16 @@ function styleValues(document, options) {
   const typeScale = Math.min(scale, horizontalScale);
   const size = (base, minimum = 20) => Math.max(minimum, Math.round(base * typeScale));
   const margin = (ratio, minimum = 20) => Math.max(minimum, Math.round(height * ratio));
-  const side = Math.max(48, Math.round(width * 0.083));
+  // TikTok's official 720x1280 in-feed LTR template marks 80 px left,
+  // 120 px right, 160 px top, and 440 px bottom as UI risk areas.
+  // Scale those asymmetric horizontal bounds to the active canvas.
+  const safeLeft = Math.max(48, Math.round(width * (80 / 720)));
+  const safeRight = Math.max(48, Math.round(width * (120 / 720)));
+  const fonts = document.fonts || {};
   const font = fontFamily(document.font || options.font || 'Noto Sans CJK SC');
+  const englishFont = fontFamily(fonts.english || font);
+  const chineseFont = fontFamily(fonts.chinese || font);
+  const titleFont = fontFamily(fonts.title || chineseFont);
   const theme = document.theme || {};
   const primary = assColor(theme.primary, '&H00FFFFFF');
   const secondary = assColor(theme.secondary, '&H00E8E2D8');
@@ -90,14 +98,14 @@ function styleValues(document, options) {
   const back = assColor(theme.back, '&H70000000');
 
   return {
-    English: [font, size(76, 32), primary, outline, back, 1, 0.4, 4, 1, 2, side, side, margin(0.289)],
-    Chinese: [font, size(46, 24), secondary, outline, back, 0, 0.2, 3, 0, 2, side, side, margin(0.228)],
-    Note: [font, size(34, 20), assColor(theme.note, '&H00D1D7D9'), '&H99101010', '&H60000000', 0, 2.2, 2, 0, 8, side, side, margin(0.0875)],
-    Source: [font, size(25, 18), assColor(theme.source, '&H00C1C7C9'), '&HAA101010', '&H60000000', 0, 0.3, 2, 0, 7, Math.max(32, Math.round(width * 0.059)), side, margin(0.048)],
-    Card: [font, size(76, 32), primary, outline, '&H80000000', 1, 1, 4, 1, 5, side, side, 0],
-    CardChinese: [font, size(46, 24), secondary, outline, '&H80000000', 0, 0.3, 3, 0, 5, side, side, 0],
-    BigWord: [font, size(106, 42), primary, outline, '&H85000000', 1, 1.4, 5, 1, 5, side, side, 0],
-    BigChinese: [font, size(50, 26), secondary, outline, '&H85000000', 0, 0.3, 3, 0, 5, side, side, 0]
+    English: [englishFont, size(88, 38), primary, outline, back, 1, 0.4, 5, 1, 2, safeLeft, safeRight, margin(500 / 1920)],
+    Chinese: [chineseFont, size(72, 34), secondary, outline, back, 1, 0.2, 4, 0, 2, safeLeft, safeRight, margin(360 / 1920)],
+    Note: [titleFont, size(76, 34), assColor(theme.note, '&H00FFFFFF'), '&H99101010', '&H60000000', 1, 1.2, 4, 1, 8, safeLeft, safeRight, margin(560 / 1920)],
+    Source: [font, size(46, 24), assColor(theme.source, '&H00C1C7C9'), '&HAA101010', '&H60000000', 0, 0.3, 3, 0, 7, safeLeft, safeRight, margin(280 / 1920)],
+    Card: [font, size(76, 32), primary, outline, '&H80000000', 1, 1, 4, 1, 5, safeLeft, safeRight, 0],
+    CardChinese: [font, size(46, 24), secondary, outline, '&H80000000', 0, 0.3, 3, 0, 5, safeLeft, safeRight, 0],
+    BigWord: [font, size(106, 42), primary, outline, '&H85000000', 1, 1.4, 5, 1, 5, safeLeft, safeRight, 0],
+    BigChinese: [font, size(50, 26), secondary, outline, '&H85000000', 0, 0.3, 3, 0, 5, safeLeft, safeRight, 0]
   };
 }
 
@@ -165,7 +173,7 @@ function generateBilingualAss(document, options = {}) {
   }
   const events = [
     ...(Array.isArray(document.events) ? document.events : []),
-    ...expandCues(Array.isArray(document.cues) ? document.cues : [])
+    ...expandCues(Array.isArray(document.cues) ? document.cues : [], document)
   ];
   validateEvents(events);
   const renderingDocument = {

@@ -1,0 +1,16 @@
+name: Bug report
+description: Report a reproducible qiaomu-cut problem without private media or credentials.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    attributes: { label: What happened? }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Reproduction, description: Use synthetic or public fixtures; redact credentials and private paths. }
+    validations: { required: true }
+  - type: input
+    attributes: { label: Environment, description: OS, Node.js, ffmpeg, and qiaomu-cut version. }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Verification output }

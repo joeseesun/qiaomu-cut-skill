@@ -3,7 +3,7 @@ name: qiaomu-cut
 description: |
   把一句话需求转成可复现、可验收视频工程的乔木智能剪辑导演。Use when the user asks to create, plan, edit, remix, explain, narrate, subtitle, animate, composite, or render a video; build English-learning movie mixes, person profiles, explainers, product launch videos, cinematic shorts, social clips, course/PPT videos, AI image/video/TTS/music-assisted stories, stock-footage stories, or multi-source montage. Routes across 33台词, ClipSeek/Pexels/Pixabay/open media, local files, ListenHub/MarsWave generation and content extraction, Coli local ASR, agent image generation, HTML/motion graphics, Manim-style explainers, ffmpeg-full rendering, subtitles, transitions, masks, and quality checks.
 metadata:
-  version: 0.4.0
+  version: 0.5.0
   author: 向阳乔木
   copyright: Copyright (c) 向阳乔木
   x: https://x.com/vista8
@@ -56,6 +56,16 @@ metadata:
 7. **Verify**：读取 render report 中与档位对应的检查结果，检查字幕安全区、素材许可记录，并查看可用的 contact sheet；自动检查不能代替内容、构图和字幕语义审看。`render` 已内置技术校验，完成后不要再机械调用一次 `qcut verify`。
 8. **Deliver**：交付 MP4、工程/IR、素材清单、license report、复现命令和剩余风险。用户需要人工拖拽精修时，可建议独立的 `joeseesun/qiaomu-cut` 浏览器编辑器；当前尚无自动工程互导时必须明确说明，不能假装已经打通。
 
+## 反馈进化协议
+
+用户对成片、字幕、节奏、构图、声音或工作流给出明确反馈时，不要只修当前项目。先完成当前修订与验收，再按 `references/feedback-evolution.md` 记录原话、证据、修改和适用范围，并检查现有偏好是否已覆盖。
+
+- 把明确的“以后都这样”“改进 skill”“这是我的偏好”视为可直接沉淀信号；把单次项目指令先记为项目级，除非它明显属于稳定的可用性或安全问题。
+- 优先把偏好落实为可执行默认值、参数、模板或验证项；只有无法编码时才只写文字规则。
+- 保留适用范围、旧值、新值和验证证据。新偏好与平台、安全、版权、无障碍或用户更新指令冲突时，以后者为准。
+- 不静默积累互相矛盾的规则。发现冲突时搜索既有记录，合并、替换或标记 superseded，并在交付中说明 Skill 如何进化。
+- 每次修改 Skill 后运行 `npm run validate`、相关 smoke test 和真实预览；没有验证证据时写 `missing evidence`，不得宣称默认已升级。
+
 ## 工具优先级
 
 - 先运行 `scripts/qcut.js doctor` 判断本机能力。
@@ -84,7 +94,17 @@ metadata:
 - `local`：用户本地素材优先，不能删除或覆盖原文件。
 - `web-info`：人物/事件/事实类视频必须记录来源链接；不确定信息要标记待核验。
 
-英语学习或跨语言视频默认采用三层字幕：主语言原句、自然中文译文、顶部词义/语境/来源注。译文以自然表达优先，不机械逐词对齐；来源层不得遮挡人脸和主画面。其他视频按内容需要删减层级，不为了形式强加双语。
+英语学习或跨语言视频默认采用三层字幕：主语言原句、自然中文译文、顶部词义/语境。影视作品来源保留在素材清单和 license report，默认不烧录到画面；只有用户明确要求或内容语义需要时才设置 `showSource: true`。译文以自然表达优先，不机械逐词对齐。其他视频按内容需要删减层级，不为了形式强加双语。
+
+9:16 英语学习视频在 1080×1920 画布上的默认字号为：英文主句 88 px、中文 72 px（加粗）、顶部标题 76 px（加粗）。安全区用于标记平台 UI 风险，不得机械地把文字压到电影画面上。横屏影视片段以 `containBlur` 居中时，优先把顶部标题放在画面上方留白约 y=560，把英文和中文放在画面下方留白约 y=1420/1560；若素材实际边界不同，按预览中的画面边缘动态调整。preview 必须检查 8 个代表帧和手机尺寸单帧，确认标题、英文、中文均不覆盖电影画面、人物或原片字幕，同时评估平台 UI 风险。完整依据见 `references/social-safe-zones.md`。
+
+英语学习、社交短视频和品牌内容默认同时生成片头与片尾。片尾不得省略：必须包含“向阳乔木”、`@vista8` 和与内容匹配的关注 CTA。片头与片尾使用同一视觉家族但不同构图和入退场动效。用户可从 `references/brand-card-templates.md` 的 20 套模板指定 `templateId`；未指定时运行 `scripts/brand_templates.js` 按题材选择，不固定套用一种。模板 ID、编号、内部风格名、调试标签和制作注释只能留在工程元数据，严禁进入公开画面、字幕、旁白或封面。片尾默认不用 push-in、pull-back 或任何缩放运镜，优先使用 100–200 ms 闪色/跳切/图形弹出后直接定帧的 `snap-flash-pop` 节奏。模板输出须落实为 timeline 镜头或等价可渲染资产，并在 preview 中观看完整动效。
+
+影视台词截取必须以完整句为边界，禁止只用固定的前后秒数。先把检索结果的 `previous/current/next` 字幕交给 `scripts/complete_sentence.js`：从语义起点延伸到句末标点，默认前留 450 ms、后留 750 ms。找不到完整句末时必须补取更多字幕、ASR 或人工听审，不能强行导出。preview 还要听开头和结尾，拒绝截在连词、从句、未落地尾音或下一条字幕明显续句的位置。
+
+镜头数量是上限而不是配额。要求“10 段”时只选择最多 10 段通过质量门的独立素材；不足 10 段必须按实际数量交付，禁止复制文件、重复下载同一场景、微调时间码复用同一镜头，或用近重复片段硬凑数量。候选去重至少同时检查：文件 SHA-256、稳定素材 ID、作品/集数与时间区间、标准化台词、视觉抽帧相似度。任何一项确认同源就只保留最佳版本，并在报告写明 `selected/target` 与删除原因。
+
+中文排版按 `references/chinese-font-themes.md` 选择语义匹配的字体主题，标题、中文译文和英文可以分别指定 `fonts.title/chinese/english`。先检测字库和授权；缺失时回退 Noto Sans CJK SC 并在报告记录，禁止静默缺字或把本机字体打包进 Skill。
 
 更多见 `references/source-adapters.md` 与 `references/licensing.md`。
 
@@ -137,4 +157,8 @@ metadata:
 - `references/licensing.md`：授权和来源记录。
 - `references/trust-boundary.md`：公开发布与账号边界。
 - `references/listenhub-provider.md`：MarsWave 完整快照、能力路由、认证、费用/上传门、任务账本、下载与 timeline 映射。
+- `references/feedback-evolution.md`：用户反馈记录、偏好抽象、冲突处理与默认值升级协议。
+- `references/social-safe-zones.md`：TikTok/抖音竖屏安全区依据、像素换算、保守交集和验收规则。
+- `references/brand-card-templates.md`：20 套片头/片尾品牌模板、默认选择和 CTA 规则。
+- `references/chinese-font-themes.md`：中文字体主题、语义选型和授权回退规则。
 - `THIRD_PARTY_NOTICES.md`：上游 MIT 版权、固定 commit/tree 和非关联声明。
