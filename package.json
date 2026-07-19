@@ -1,6 +1,6 @@
 {
   "name": "qiaomu-cut-skill",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Qiaomu agent-native video director with governed ListenHub generation, local ASR, and reproducible rendering",
   "type": "commonjs",
@@ -20,7 +20,10 @@
     "narration:smoke": "node scripts/file_narration_smoke.js",
     "vendor:verify": "node scripts/verify_marswave_vendor.js",
     "security-smoke": "node scripts/security_smoke.js",
-    "release-check": "node scripts/verify_marswave_vendor.js && node scripts/release_check.js",
+    "typography:smoke": "node scripts/bilingual_typography_smoke.js",
+    "brand:smoke": "node scripts/brand_templates_smoke.js",
+    "sentence:smoke": "node scripts/sentence_boundary_smoke.js",
+    "release-check": "node scripts/verify_marswave_vendor.js && node scripts/bilingual_typography_smoke.js && node scripts/brand_templates_smoke.js && node scripts/sentence_boundary_smoke.js && node scripts/release_check.js",
     "workflow": "node scripts/qcut.js workflow list",
     "validate": "python3 scripts/validate_skill.py .",
     "trigger-eval": "python3 scripts/trigger_eval.py . --cases evals/trigger_cases.json --output reports/trigger-eval.json"

@@ -1,5 +1,7 @@
 # qiaomu-cut
 
+**中文** | [English](#english)
+
 > 你只说一句“我要什么视频”，它把素材、分镜、字幕、转场、动效、渲染和质检组织成一个可复现的视频工程。
 > Say what video you want; qiaomu-cut turns it into a source-aware, renderer-ready, verifiable video project.
 
@@ -14,7 +16,7 @@
 
 qiaomu-cut 把这些拆成一个可复用的视频导演系统：它先生成 `QiaoCut IR`，再按环境路由到 33台词、ClipSeek/Pexels/Pixabay、本地素材、ListenHub/MarsWave 图片/视频/TTS/Voice/音乐、Coli 本地 ASR、agent 图片生成、HTML/Manim/PPT 等可用引擎，最终由 ffmpeg-full 合成。
 
-v0.4 已真实实现的是：项目时间线渲染、图片/视频取景、有限 Ken Burns 运镜、三层双语 ASS、macOS 与文件型旁白、确定性程序音乐、原声混合/ducking、`preview` / `standard` / `final` 三档渲染、分层验收和项目内内容寻址缓存；同时完整锁定 MarsWave 上游技能快照，并用安全 adapter 接入其当前 CLI 能力、付费/上传确认、私有任务 capture、生成物下载校验和 manifest 入库。HTML 视频捕获、Manim/PPT 直出、复杂遮罩、速度渐变和完整转场库目前仍是工作流接口与扩展方向，不冒充已经全部内置。
+v0.5 已真实实现的是：项目时间线渲染、三层双语 ASS、移动端大字号与平台安全区、20 套品牌片头片尾模板、无缩放快速片尾、完整句裁切规则、素材文件/场景去重门、macOS 与文件型旁白、程序音乐、原声混合、`preview` / `standard` / `final` 三档渲染、分层验收和项目内缓存；同时完整锁定 MarsWave 上游技能快照，并用安全 adapter 接入其当前 CLI 能力、付费/上传确认、私有任务 capture、生成物下载校验和 manifest 入库。HTML 视频捕获、Manim/PPT 直出、复杂遮罩、速度渐变和完整转场库目前仍是工作流接口与扩展方向，不冒充已经全部内置。
 
 它不是承诺“魔法般永远一键完美”，而是把专业视频制作流程变成 agent 能执行、能验证、能继续扩展的工程。
 
@@ -411,7 +413,44 @@ qiaomu-cut 借鉴这些公开项目的方法和思想，不复制其私有内容
 | `QIAOMU_COLI_CLI` | 本地 ASR 可选 | 覆盖 `coli` CLI 路径；默认从 `PATH` 查找 |
 | `LISTENHUB_API_KEY` | OpenAPI 工作流可选 | 环境变量优先，也可使用官方本机 credential store；均不写入项目或仓库，命令参数禁传 key；若已在聊天/日志明文暴露，应立即撤销并轮换 |
 
-`missing evidence`：未运行任何 ListenHub 付费生成；只有本机 CLI 能力/status、mock 门禁和本地 adapter 证据。Provider 输入保留期、训练使用、数据地域与下游删除策略未知；`qiaomu-cut-skill` 公开仓库发布与 `npx skills add` clean install 尚需验证；未找到 33台词公开 API 文档，因此公开包没有宣称“只装 App 即零额外配置”；与浏览器编辑器的工程互导仍是后续接口。
+`missing evidence`：未运行任何 ListenHub 付费生成；只有本机 CLI 能力/status、mock 门禁和本地 adapter 证据。Provider 输入保留期、训练使用、数据地域与下游删除策略未知；未找到 33台词公开 API 文档，因此公开包没有宣称“只装 App 即零额外配置”；与浏览器编辑器的工程互导仍是后续接口。
+
+---
+
+<a name="english"></a>
+# English
+
+qiaomu-cut is an agent-native video director skill. A short brief becomes a reproducible project with governed sourcing, shot planning, bilingual captions, brand cards, narration routing, ffmpeg rendering, and evidence-backed verification.
+
+## What is included
+
+- `QiaoCut IR` planning and deterministic timeline rendering.
+- Preview, standard, and final render profiles.
+- Three-layer bilingual ASS captions with mobile-safe typography.
+- Twenty selectable intro/outro families; internal template metadata never appears in public video.
+- Complete-sentence clip boundaries and quality-over-count deduplication.
+- Local media, ClipSeek discovery, governed 33tc adapters, and ListenHub/MarsWave provider routing.
+- Asset manifests, provenance, licensing boundaries, render reports, and no-clobber path checks.
+
+## Install and verify
+
+```bash
+npx skills add joeseesun/qiaomu-cut-skill --skill qiaomu-cut
+node ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json
+```
+
+For development:
+
+```bash
+npm run validate
+npm run release-check
+```
+
+Node.js 18+ is required. ListenHub integration requires Node.js 20+. Full rendering needs an ffmpeg build with libass, drawtext, overlay, loudnorm, and H.264 support.
+
+## Security, privacy, and limits
+
+Remote creation may cost credits and always requires explicit `--yes`; uploading local media also requires `--allow-upload`. Credentials stay in environment variables or provider-owned local stores and must never enter commands, manifests, captures, or Git. A downloadable movie clip is not automatically licensed for redistribution. See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the Chinese sections above for the complete trust and licensing model.
 
 <!-- qiaomu-profile:start -->
 ## 关于向阳乔木
