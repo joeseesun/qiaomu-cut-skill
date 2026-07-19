@@ -547,6 +547,27 @@ function main() {
     assert(secretReport.failures.some((failure) => failure.includes('hidden-audio') && failure.includes('media signature is blocked')));
     assert(!secretReport.failures.some((failure) => failure.includes('source.ts')));
 
+    const vendorGuardRoot = path.join(temp, 'vendor-guard-scan');
+    fs.mkdirSync(vendorGuardRoot);
+    fs.writeFileSync(
+      path.join(vendorGuardRoot, 'regression-fixture.js'),
+      "const glob = require('path').join('vendor', 'marswaveai-skills', '**', 'SKILL.md');\nmodule.exports = { glob };\n"
+    );
+    fs.writeFileSync(
+      path.join(vendorGuardRoot, 'vendor-mention-only.js'),
+      "// See THIRD_PARTY_NOTICES.md for the vendor lock file details.\nmodule.exports = {};\n"
+    );
+    fs.mkdirSync(path.join(vendorGuardRoot, 'vendor'), { recursive: true });
+    fs.writeFileSync(
+      path.join(vendorGuardRoot, 'vendor', 'SKILL.md'),
+      'vendor content itself is never scanned as a source file by this guard.'
+    );
+    const vendorGuardReport = scanRoot(vendorGuardRoot);
+    assert.equal(vendorGuardReport.ok, false);
+    assert(vendorGuardReport.failures.some((failure) => failure.includes('regression-fixture.js') && failure.includes('nested-skill-instruction')));
+    assert(!vendorGuardReport.failures.some((failure) => failure.includes('vendor-mention-only.js')));
+    assert(!vendorGuardReport.failures.some((failure) => failure.includes('vendor/SKILL.md')));
+
     process.stdout.write(`${JSON.stringify({ ok: true, checks: checkCount }, null, 2)}\n`);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });

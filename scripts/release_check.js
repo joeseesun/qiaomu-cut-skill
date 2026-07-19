@@ -17,6 +17,28 @@ const MEDIA_BLOCKLIST = new Set([
 const SKIP_ROOT_DIRS = new Set(['.git']);
 const VENDOR_SYMLINK_ROOT = path.join('vendor', 'marswaveai-skills');
 
+// vendor/marswaveai-skills is a pinned, non-executable evidence snapshot (see
+// THIRD_PARTY_NOTICES.md / references/trust-boundary.md). Some nested vendored
+// skills (e.g. cola-avatar-pack/GENERATE.md) contain destructive shell instructions
+// and silent AGENT.md persistence injection that must never run as part of this
+// repo's own workflow. Today no script reads vendor/**/*.md as instructions; this
+// guard turns that absence into a checked invariant instead of a silent assumption.
+const VENDOR_EXEC_GUARD_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.py', '.sh']);
+const VENDOR_EXEC_GUARD_ALLOWED_READERS = new Set([
+  'scripts/verify_marswave_vendor.js',
+  'scripts/release_check.js',
+  // Carries this guard's own regression fixtures (literal vendor/SKILL.md
+  // strings used to prove the check fires), not real vendor access code.
+  'scripts/listenhub_smoke.js'
+]);
+// Two independent substring checks rather than one contiguous-path regex: real
+// code usually builds vendor paths via path.join(...)/glob(...) with separate
+// string arguments, so "vendor" and "SKILL.md" won't sit adjacent in the source
+// text. Requiring both tokens to appear anywhere in the same file is a coarser
+// but far harder to accidentally defeat static guard.
+const VENDOR_EXEC_GUARD_PATH_TOKEN = /\bvendor\b/i;
+const VENDOR_EXEC_GUARD_INSTRUCTION_TOKEN = /SKILL\.md|GENERATE\.md|\*\*[\\/]\*\.(?:md|js|py|sh)/i;
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -165,6 +187,15 @@ function scanRoot(root = ROOT) {
     const text = content.toString('latin1');
     for (const check of SECRET_PATTERNS) {
       if (check.pattern.test(text)) failures.push(`${entry.relative}: ${check.name}`);
+    }
+    if (
+      VENDOR_EXEC_GUARD_EXTENSIONS.has(extension) &&
+      !entry.relative.startsWith('vendor/') &&
+      !VENDOR_EXEC_GUARD_ALLOWED_READERS.has(entry.relative) &&
+      VENDOR_EXEC_GUARD_PATH_TOKEN.test(text) &&
+      VENDOR_EXEC_GUARD_INSTRUCTION_TOKEN.test(text)
+    ) {
+      failures.push(`${entry.relative}: references both "vendor" and a nested-skill-instruction file/glob (SKILL.md/GENERATE.md/**/*.md) outside the allowed hash/symlink verifiers — this could auto-load a nested vendored skill such as cola-avatar-pack and must be reviewed before merge`);
     }
   }
 
