@@ -145,6 +145,7 @@ process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-to
     const fake33tcEnvironment = {
       ...process.env,
       QIAOMU_33TC_CLI: fake33tc,
+      QIAOMU_CUT_LOCAL_PREFERENCES: path.join(temp, 'missing-local-preferences.json'),
       LISTENHUB_API_KEY: 'synthetic-listenhub-secret',
       GITHUB_TOKEN: 'synthetic-github-secret'
     };
@@ -174,6 +175,35 @@ process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-to
     const confirmed33tcCall = JSON.parse(fs.readFileSync(fake33tcLog, 'utf8').trim());
     assert.equal(confirmed33tcCall.listenhubApiKeyPresent, false);
     assert.equal(confirmed33tcCall.githubTokenPresent, false);
+    const localPreferences = path.join(temp, 'qiaocut-local-preferences.json');
+    fs.writeFileSync(localPreferences, JSON.stringify({
+      schema: 'qiaocut.local-preferences.v1',
+      '33tc': { scope: 'local-user', autoUseCredits: true }
+    }), { mode: 0o600 });
+    const persistent33tc = childProcess.spawnSync(
+      process.execPath,
+      [qcut33tc, 'pick', 'clip-fixture'],
+      {
+        encoding: 'utf8',
+        env: { ...fake33tcEnvironment, QIAOMU_CUT_LOCAL_PREFERENCES: localPreferences }
+      }
+    );
+    assert.equal(persistent33tc.status, 0);
+    assert.match(persistent33tc.stderr, /persistent authorization/);
+    const persistent33tcCall = JSON.parse(fs.readFileSync(fake33tcLog, 'utf8').trim().split('\n').at(-1));
+    assert(persistent33tcCall.args.includes('--yes'));
+    assert.equal(persistent33tcCall.listenhubApiKeyPresent, false);
+    assert.equal(persistent33tcCall.githubTokenPresent, false);
+    fs.chmodSync(localPreferences, 0o644);
+    const insecurePersistent33tc = childProcess.spawnSync(
+      process.execPath,
+      [qcut33tc, 'pick', 'clip-fixture'],
+      {
+        encoding: 'utf8',
+        env: { ...fake33tcEnvironment, QIAOMU_CUT_LOCAL_PREFERENCES: localPreferences }
+      }
+    );
+    assert.equal(insecurePersistent33tc.status, 1);
     const planned = childProcess.spawnSync(
       process.execPath,
       [qcut, 'plan', '做一个唐代李白水墨人物中文讲解视频，忧郁但有希望', '--json'],
@@ -182,7 +212,7 @@ process.stdout.write(JSON.stringify({ id: 'clip-fixture', token: 'opaque-33tc-to
     assert.equal(planned.status, 0);
     const plannedIr = JSON.parse(planned.stdout);
     assert.equal(plannedIr.generation.narration.providerPriority[0], 'listenhub');
-    assert.equal(plannedIr.generation.narration.preferredVoiceName, '向阳乔木');
+    assert.equal(plannedIr.generation.narration.preferredVoiceName, '向阳乔木 v1.1');
     assert.equal(plannedIr.style.visualBible.strategy, 'content-derived');
     assert.match(plannedIr.style.visualBible.medium, /ink-wash/);
     assert.match(plannedIr.style.visualBible.era, /Tang-dynasty/);

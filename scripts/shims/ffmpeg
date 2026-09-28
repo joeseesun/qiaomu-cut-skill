@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+'use strict';
+
+// Generic network-resilient ffmpeg launcher used only for delegated media
+// downloads. It never reads or prints the input URL; the parent adapter keeps
+// responsibility for URL redaction and provider-specific behavior.
+
+const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+function executable(file) {
+  if (!file) return null;
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return fs.realpathSync(file);
+  } catch {
+    return null;
+  }
+}
+
+function resolveRealFfmpeg() {
+  const self = fs.realpathSync(__filename);
+  const candidates = [
+    process.env.QIAOMU_FFMPEG,
+    '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg',
+    '/usr/local/opt/ffmpeg-full/bin/ffmpeg'
+  ];
+  for (const directory of String(process.env.PATH || '').split(path.delimiter)) {
+    if (directory) candidates.push(path.join(directory, 'ffmpeg'));
+  }
+  for (const candidate of candidates) {
+    const resolved = executable(candidate);
+    if (resolved && resolved !== self) return resolved;
+  }
+  return null;
+}
+
+function remoteInput(args) {
+  const index = args.indexOf('-i');
+  if (index < 0 || index + 1 >= args.length) return null;
+  return /^https?:\/\//i.test(String(args[index + 1])) ? { index, value: args[index + 1] } : null;
+}
+
+function resilientArgs(args, inputIndex) {
+  if (args.includes('-reconnect')) return args;
+  const networkOptions = [
+    '-reconnect', '1',
+    '-reconnect_at_eof', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_on_network_error', '1',
+    '-reconnect_on_http_error', '429,5xx',
+    '-reconnect_delay_max', '3',
+    '-rw_timeout', '20000000'
+  ];
+  return [...args.slice(0, inputIndex), ...networkOptions, ...args.slice(inputIndex)];
+}
+
+function wait(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function main() {
+  const real = resolveRealFfmpeg();
+  if (!real) {
+    process.stderr.write('qiaomu-cut ffmpeg shim could not resolve a real ffmpeg executable.\n');
+    return 127;
+  }
+  const original = process.argv.slice(2);
+  const remote = remoteInput(original);
+  const args = remote ? resilientArgs(original, remote.index) : original;
+  const requested = Number(process.env.QIAOMU_FFMPEG_RETRIES || 5);
+  const attempts = remote ? Math.max(1, Math.min(5, Number.isFinite(requested) ? Math.round(requested) : 5)) : 1;
+  let status = 1;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = spawnSync(real, args, { stdio: 'inherit', env: process.env });
+    status = result.status == null ? 1 : result.status;
+    if (status === 0) return 0;
+    if (result.error) {
+      process.stderr.write(`qiaomu-cut ffmpeg shim failed to launch ffmpeg: ${result.error.message}\n`);
+      return status;
+    }
+    if (attempt < attempts) {
+      process.stderr.write(`qiaomu-cut: transient media read failed; retrying ffmpeg (${attempt}/${attempts}).\n`);
+      wait(attempt * 1000);
+    }
+  }
+  return status;
+}
+
+process.exitCode = main();

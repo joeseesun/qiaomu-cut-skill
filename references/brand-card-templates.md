@@ -2,6 +2,8 @@
 
 所有模板都成对提供不同构图的 intro/outro；片尾固定含“向阳乔木”、`@vista8` 和关注 CTA。可选 ID：
 
+**口播同步（2026-07-25 起）**：explainer/品牌成片的 outro 旁白必须同步说出关注引导（`向阳乔木` + `关注` 或 `@vista8`），不能只做无声画面品牌卡。推荐句式：「……结论。关注向阳乔木，继续拆解大模型关键词。」spec gate 规则 `outro-spoken-brand-cta` / `outro-visual-brand-cta`。
+
 模板 ID、序号、风格中文名、渲染参数和调试文字只用于工程选择，绝不能显示在成片。片尾默认采用 `snap-flash-pop`：短闪色帧 → 品牌跳切帧 → CTA 定帧；三个镜头 `motion=none`，禁止缩放推拉。
 
 1. `editorial-red` 杂志红  2. `midnight-gold` 午夜金  3. `paper-note` 纸张笔记  4. `neo-brutal` 新粗野

@@ -44,6 +44,7 @@ type AssetCandidate = {
 - 公开包边界：`qiaomu-cut` 只委托 `QIAOMU_33TC_CLI` 或 `PATH` 中独立安装、获得授权的 `33tc` 适配器；不再分发 App 私有协议、签名或解密实现。
 - 隐私：qcut wrapper 清洗结构化 token/cookie/password 字段和 URL；独立 adapter 仍必须避免输出无字段标签的裸凭据。公共 JSON 输出应使用字段白名单。
 - 外部写操作：`pick` / `cut` 会创建远端裁片任务并可能消耗积分，必须先核对时间范围，且仅在明确确认后传 `--yes`。
+- 下载弹性：`pick/cut/download` 的 HTTP(S) 输入默认经过有界 ffmpeg reconnect/retry；本地文件不重试。若任务已创建但下载失败，qcut 输出已有 task ID 和 `download --no-status` 恢复提示，禁止为修复下载重新提交付费 cut。
 - 许可：成功下载不等于获得影视作品的公开传播或商业权利。
 
 ### ListenHub / MarsWave
@@ -55,7 +56,7 @@ type AssetCandidate = {
 - 付费门：远端创建必须同时提供 `--yes` 与 `--qcut-project`。上传本地文件还必须提供 `--allow-upload`。
 - 结果：原始任务 JSON 以 `0600` 写入项目私有 `.qiaocut/jobs/listenhub/`；终端输出会清除密钥、Bearer 和签名 URL。
 - 入库：用 `qcut fetch` 从私有任务结果下载，完成 HTTPS/DNS/体积/MIME/文件签名检查后，写入 `assets/generated/` 与 `assets-manifest.json`。已有本地文件用 `qcut ingest`。
-- 默认旁白：新中文讲解音频优先使用 `qcut listenhub narration`；它只读查询 Chinese speakers、唯一精确匹配“向阳乔木”、执行 TTS、自动 ingest 并返回带 speaker/text/catalog/capture provenance 的时间线对象。缺失或歧义时不得静默换音色。
+- 默认旁白：新中文讲解音频优先使用 `qcut listenhub narration`；它只读查询 Chinese speakers、唯一精确匹配“向阳乔木 v1.1”、默认请求 MP3、执行 TTS、自动 ingest 并返回带 speaker/text/catalog/capture provenance 的时间线对象。缺失或歧义时不得静默换音色。
 - 默认生图：先按主题、受众、年代、情绪、平台与媒介锁定 visual bible，再选 agent imagegen 或 ListenHub image。Provider 选择不能替代内容一致性审查。
 - 许可：生成物标记 `ai_generated` 和 `provider_terms_unverified`；上游 MIT 许可证不等于生成内容可商用。
 

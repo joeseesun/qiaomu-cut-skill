@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "total": 16,
+  "total": 24,
   "failures": [],
   "results": [
     {
@@ -20,6 +20,11 @@
     },
     {
       "id": "explainer",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "one_shot_llm_rl_explainer",
       "expected": true,
       "got": true
     },
@@ -54,6 +59,31 @@
       "got": true
     },
     {
+      "id": "motion_showreel",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "ui_morph_loop",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "js_transformer_video",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "lyric_mv",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "talking_head_lineart",
+      "expected": true,
+      "got": true
+    },
+    {
       "id": "only_article",
       "expected": false,
       "got": false
@@ -80,6 +110,16 @@
     },
     {
       "id": "listenhub_account_only",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "css_animation_question",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "web_page_animation",
       "expected": false,
       "got": false
     }

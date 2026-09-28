@@ -21,6 +21,11 @@
       "reason": "explainer animation"
     },
     {
+      "id": "one_shot_llm_rl_explainer",
+      "input": "制作一个科普视频：介绍LLM中的“RL”",
+      "reason": "one-line explainer-social autopilot request"
+    },
+    {
       "id": "product_launch",
       "input": "给我的网站做一个产品发布视频，网页动效融入剪辑",
       "reason": "product launch video with web motion"
@@ -49,6 +54,31 @@
       "id": "qiaomu_voice_content_style",
       "input": "用向阳乔木的声音做中文讲解，配图要跟视频内容和年代感匹配",
       "reason": "video narration identity and content-derived image direction"
+    },
+    {
+      "id": "motion_showreel",
+      "input": "做一个 15 秒的动态图形 showreel，全力以赴",
+      "reason": "code-drawn motion graphics video"
+    },
+    {
+      "id": "ui_morph_loop",
+      "input": "用代码做一个 UI 形态变换的无缝循环动效视频，卡 120 BPM 的拍子",
+      "reason": "UI motion loop video"
+    },
+    {
+      "id": "js_transformer_video",
+      "input": "帮我用 JS 做一个视频，主题是：什么是 Transformer",
+      "reason": "code-rendered explainer video"
+    },
+    {
+      "id": "lyric_mv",
+      "input": "把这首歌做成竖屏歌词 MV，手绘线稿风格",
+      "reason": "lyric music video"
+    },
+    {
+      "id": "talking_head_lineart",
+      "input": "把 short-1.mp4 做成竖屏短片：人像缩成右下角圆形画中画，主画面换成跟随讲述内容的线稿动画",
+      "reason": "talking-head remix with animated B-roll"
     }
   ],
   "should_not_trigger": [
@@ -81,6 +111,16 @@
       "id": "listenhub_account_only",
       "input": "帮我看看 ListenHub 账户还有多少积分",
       "reason": "account status alone is not a video editing request"
+    },
+    {
+      "id": "css_animation_question",
+      "input": "CSS 里 transition 和 animation 有什么区别？",
+      "reason": "web dev question, no video output"
+    },
+    {
+      "id": "web_page_animation",
+      "input": "给我的官网首页加一个 hover 动效",
+      "reason": "website UI work, not a video"
     }
   ]
 }

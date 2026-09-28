@@ -57,6 +57,42 @@ function renderText(text, style, highlightColor) {
   }).join('');
 }
 
+function animationType(event) {
+  if (!event || !event.animation) return 'fade';
+  if (typeof event.animation === 'string') return event.animation;
+  return event.animation.type || 'fade';
+}
+
+function inferredSegments(text) {
+  const value = String(text == null ? '' : text);
+  if (/\s/.test(value)) {
+    return value.split(/(\s+)/).filter(Boolean).map((part) => ({ text: part }));
+  }
+  return Array.from(value).map((part) => ({ text: part }));
+}
+
+function karaokeText(event, theme = {}) {
+  const segments = Array.isArray(event.segments) && event.segments.length
+    ? event.segments
+    : inferredSegments(event.text);
+  const totalCentiseconds = Math.max(1, Math.round((number(event.end, 0) - number(event.start, 0)) * 100));
+  const weights = segments.map((segment) => Math.max(0.01,
+    number(segment.durationMs, number(segment.duration, 1) * (segment.durationMs == null ? 1 : 0.001))
+  ));
+  const weightTotal = weights.reduce((sum, value) => sum + value, 0);
+  let remaining = totalCentiseconds;
+  const highlight = `${assColor(theme.highlight, '&H0042B9F4')}&`;
+  const pending = `${assColor(theme.karaokePending, '&H00D3D6DC')}&`;
+  const text = segments.map((segment, index) => {
+    const duration = index === segments.length - 1
+      ? Math.max(1, remaining)
+      : Math.max(1, Math.round(totalCentiseconds * weights[index] / weightTotal));
+    remaining -= duration;
+    return `{\\kf${duration}}${escapePlain(segment.text)}`;
+  }).join('');
+  return `{\\1c${highlight}\\2c${pending}}${text}`;
+}
+
 function expandCues(cues, options = {}) {
   const events = [];
   for (const cue of cues || []) {
@@ -140,21 +176,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 function eventLine(event, document = {}) {
   const style = STYLE_ORDER.includes(event.style) ? event.style : 'English';
   const theme = document.theme || {};
-  const tags = [`\\fad(${Math.max(0, Math.round(number(event.fadeInMs, 120)))},${Math.max(0, Math.round(number(event.fadeOutMs, 140)))})`];
+  const animation = animationType(event);
+  const tags = [];
+  if (animation !== 'none') {
+    tags.push(`\\fad(${Math.max(0, Math.round(number(event.fadeInMs, 120)))},${Math.max(0, Math.round(number(event.fadeOutMs, 140)))})`);
+  }
   const width = Math.max(320, Math.round(number(document.width, 1080)));
   const height = Math.max(240, Math.round(number(document.height, 1920)));
+  const coordinateWidth = Math.max(1, number(document.coordinateWidth, width));
+  const coordinateHeight = Math.max(1, number(document.coordinateHeight, height));
+  const coordinateScaleX = width / coordinateWidth;
+  const coordinateScaleY = height / coordinateHeight;
   if (style === 'BigWord') tags.push(`\\pos(${Math.round(width / 2)},${Math.round(height * 0.469)})`);
   if (style === 'BigChinese') tags.push(`\\pos(${Math.round(width / 2)},${Math.round(height * 0.547)})`);
   if (style === 'Card') tags.push(`\\pos(${Math.round(width / 2)},${Math.round(height * 0.453)})`);
   if (style === 'CardChinese') tags.push(`\\pos(${Math.round(width / 2)},${Math.round(height * 0.526)})`);
   if (Array.isArray(event.pos) && event.pos.length === 2) {
-    tags.push(`\\pos(${number(event.pos[0], width / 2)},${number(event.pos[1], height / 2)})`);
+    const x = Math.round(number(event.pos[0], coordinateWidth / 2) * coordinateScaleX);
+    const y = Math.round(number(event.pos[1], coordinateHeight / 2) * coordinateScaleY);
+    const slideOffset = Math.max(1, Math.round(42 * coordinateScaleY));
+    if (animation === 'slide-up') tags.push(`\\move(${x},${y + slideOffset},${x},${y},0,220)`);
+    else tags.push(`\\pos(${x},${y})`);
   }
-  const text = `{${tags.join('')}}${renderText(event.text, style, `${assColor(theme.highlight, '&H0042B9F4')}&`)}`;
+  if (animation === 'pop') {
+    tags.push('\\fscx72\\fscy72\\t(0,180,\\fscx100\\fscy100)');
+  }
+  const body = animation === 'karaoke' || animation === 'word-follow' || animation === 'typewriter'
+    ? karaokeText(event, theme)
+    : renderText(event.text, style, `${assColor(theme.highlight, '&H0042B9F4')}&`);
+  const text = `{${tags.join('')}}${body}`;
   return `Dialogue: ${Math.round(number(event.layer, 0))},${assTime(event.start)},${assTime(event.end)},${style},,0,0,0,,${text}`;
 }
 
 function validateEvents(events) {
+  const animations = new Set(['fade', 'none', 'pop', 'slide-up', 'karaoke', 'word-follow', 'typewriter']);
   for (const [index, event] of events.entries()) {
     const start = number(event.start, NaN);
     const end = number(event.end, NaN);
@@ -163,6 +218,18 @@ function validateEvents(events) {
     }
     if (typeof event.text !== 'string' || !event.text.trim()) {
       throw new Error(`Caption event ${index + 1} has no text.`);
+    }
+    const animation = animationType(event);
+    if (!animations.has(animation)) throw new Error(`Caption event ${index + 1} has unsupported animation: ${animation}.`);
+    if (event.segments != null) {
+      if (!Array.isArray(event.segments) || event.segments.length === 0) {
+        throw new Error(`Caption event ${index + 1} segments must be a non-empty array.`);
+      }
+      for (const segment of event.segments) {
+        if (!segment || typeof segment.text !== 'string' || !segment.text) {
+          throw new Error(`Caption event ${index + 1} contains an invalid segment.`);
+        }
+      }
     }
   }
 }
@@ -180,7 +247,9 @@ function generateBilingualAss(document, options = {}) {
     ...document,
     font: options.font || document.font,
     width: number(options.width, document.width || 1080),
-    height: number(options.height, document.height || 1920)
+    height: number(options.height, document.height || 1920),
+    coordinateWidth: number(options.coordinateWidth, document.coordinateWidth || document.width || options.width || 1080),
+    coordinateHeight: number(options.coordinateHeight, document.coordinateHeight || document.height || options.height || 1920)
   };
   return header(renderingDocument, renderingDocument) + events.map((event) => eventLine(event, renderingDocument)).join('\n') + '\n';
 }
@@ -210,6 +279,7 @@ module.exports = {
   escapePlain,
   expandCues,
   generateBilingualAss,
+  karaokeText,
   readCaptionDocument,
   renderText
 };

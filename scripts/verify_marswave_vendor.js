@@ -65,7 +65,8 @@ function main() {
   const lock = JSON.parse(fs.readFileSync(LOCK, 'utf8'));
   const layouts = [
     { name: 'git-source', expected: lock.snapshot },
-    { name: 'dereferenced-installer', expected: lock.distributionLayout }
+    { name: 'dereferenced-installer', expected: lock.distributionLayout },
+    { name: 'quarantined-distribution', expected: lock.quarantinedDistributionLayout }
   ].filter((layout) => layout.expected);
   const attempts = layouts.map((layout) => ({
     name: layout.name,

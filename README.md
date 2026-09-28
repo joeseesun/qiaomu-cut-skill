@@ -1,11 +1,11 @@
 # qiaomu-cut
 
-**中文** | [English](#english)
-
 > 你只说一句“我要什么视频”，它把素材、分镜、字幕、转场、动效、渲染和质检组织成一个可复现的视频工程。
 > Say what video you want; qiaomu-cut turns it into a source-aware, renderer-ready, verifiable video project.
 
 [![License](https://img.shields.io/badge/license-MIT-black?style=flat-square)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/joeseesun/qiaomu-cut-skill?style=flat-square)](https://github.com/joeseesun/qiaomu-cut-skill/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/joeseesun/qiaomu-cut-skill?style=flat-square)](https://github.com/joeseesun/qiaomu-cut-skill/commits/main)
 [![Skill](https://img.shields.io/badge/agent%20skill-qiaomu--cut-blueviolet?style=flat-square)](SKILL.md)
 
 ![qiaomu-cut 架构示意](docs/assets/qiaomu-cut-demo.svg)
@@ -16,7 +16,9 @@
 
 qiaomu-cut 把这些拆成一个可复用的视频导演系统：它先生成 `QiaoCut IR`，再按环境路由到 33台词、ClipSeek/Pexels/Pixabay、本地素材、ListenHub/MarsWave 图片/视频/TTS/Voice/音乐、Coli 本地 ASR、agent 图片生成、HTML/Manim/PPT 等可用引擎，最终由 ffmpeg-full 合成。
 
-v0.5 已真实实现的是：项目时间线渲染、三层双语 ASS、移动端大字号与平台安全区、20 套品牌片头片尾模板、无缩放快速片尾、完整句裁切规则、素材文件/场景去重门、macOS 与文件型旁白、程序音乐、原声混合、`preview` / `standard` / `final` 三档渲染、分层验收和项目内缓存；同时完整锁定 MarsWave 上游技能快照，并用安全 adapter 接入其当前 CLI 能力、付费/上传确认、私有任务 capture、生成物下载校验和 manifest 入库。HTML 视频捕获、Manim/PPT 直出、复杂遮罩、速度渐变和完整转场库目前仍是工作流接口与扩展方向，不冒充已经全部内置。
+v0.9 已真实实现的是：一句话科普 Autopilot、影视英语混剪快速通道、付费切片前完整句门、33台词下载有界重连与已有任务恢复、素材流/SHA 审计、批量 HTML/SVG 场景渲染、自动审片帧、轻量场景认知契约、真实旁白时长锁、动态字幕、独立 SFX、向阳乔木 v1.1 MP3 旁白、三档渲染和 final/full 验收。PPT 直出、复杂遮罩、速度渐变、强制逐词对齐和更完整的转场库仍是外部能力，不冒充已全部内置。
+
+v0.13 新增 **代码动态图形工作室**：参考 54 个 Opus 5.5 代码生成视频案例，把“导演信”写法、先分镜后代码、节拍网格卡点、seek(t) 确定性、子帧动态模糊、音效峰值对齐和 −14 LUFS 母带都做成了可执行的 `qcut motion` / `qcut audio` 命令与硬门；并新增 `qcut setup`，缺什么依赖就自动装什么。
 
 它不是承诺“魔法般永远一键完美”，而是把专业视频制作流程变成 agent 能执行、能验证、能继续扩展的工程。
 
@@ -33,11 +35,14 @@ mkdir -p ~/.agents/skills
 cp -R qiaomu-cut ~/.agents/skills/qiaomu-cut
 ```
 
-验证：
+验证并自动补齐依赖（ffmpeg-full、中文字幕字体、playwright + Chromium、Manim、ListenHub CLI）：
 
 ```bash
 node ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json
+node ~/.agents/skills/qiaomu-cut/scripts/qcut.js setup
 ```
+
+`setup` 是幂等的：已就绪的组件跳过，缺失的用 Homebrew（Linux 用 apt）/npm 安装，playwright 装在 skill 自己的 `.deps/`。Agent 使用本 skill 时遇到缺依赖会直接运行它并继续任务，不会让你手动补环境。
 
 ## 你可以这样说
 
@@ -46,8 +51,13 @@ node ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json
 - “介绍乔布斯，做一个电影感人物短片，有时间线和档案照片。”
 - “把这个口播视频剪成小红书风格，强字幕、B-roll、卡点转场。”
 - “用 3Blue1Brown 风格解释 Transformer attention。”
+- “制作一个科普视频：介绍 LLM 中的 RL。”
 - “给我的网站做一个产品发布视频，网页动效融入剪辑。”
 - “用 AI 生成三个电影感转场镜头、中文旁白和配乐，再合成 45 秒预告片。”
+- “做一个 15 秒的动态图形 showreel，全力以赴。”
+- “用代码做一个卡 120 BPM 的 UI 形态变换无缝循环。”
+- “把这首歌做成竖屏手绘歌词 MV。”
+- “把我的口播改成线稿动画讲解，人像缩成右下角画中画。”
 
 ## 它会做什么
 
@@ -63,7 +73,7 @@ node ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json
 - [ ] Node.js 18+：`node --version`
 - [ ] 使用 ListenHub provider 时 Node.js 20+，并运行 `scripts/bootstrap_listenhub.sh --check`。
 - [ ] macOS 推荐 Homebrew：`brew --version`
-- [ ] ffmpeg-full：`scripts/bootstrap_macos.sh --check`
+- [ ] ffmpeg-full、字体、浏览器、Manim：`node scripts/qcut.js setup --check`（缺失时去掉 `--check` 即自动安装）
 - [ ] 需要影视台词素材时，本机已安装并登录 33台词 App，并另行安装获得授权的 `33tc` CLI adapter；用 `which 33tc` 验证，或设置 `QIAOMU_33TC_CLI`。
 - [ ] 需要发布到 GitHub 时，GitHub CLI 已登录：`gh auth status`
 - [ ] 需要 AI 图片生成时，当前 agent 环境提供图片生成工具。
@@ -95,6 +105,74 @@ node ~/.agents/skills/qiaomu-cut/scripts/qcut.js listenhub doctor --json
 
 ## CLI 示例
 
+### 代码动态图形工作流（motion-design）
+
+```bash
+node scripts/qcut.js motion styles                      # 7 种预设：product-promo / ui-morph-loop / showreel / line-art-explainer / lyric-mv / pixel-art / cinematic-3d
+node scripts/qcut.js motion init ./promo --style product-promo --audio assets/song.mp3 --json
+#   → motion-brief.json（inputs → direction → structure → build → gotchas → start）
+#   → reports/beat-grid.json（BPM、强拍、每小节能量、drop）
+#   → scenes/main.html（seek(t) 纯函数起步场景）+ lib/qiaocut-motion.js（闭式弹簧、叠加、拖拽、随机、节拍）
+node scripts/qcut.js motion check ./promo --json        # 先分镜后代码：镜头写完、切点在拍上、Banned≥3、确定性 lint
+node scripts/qcut.js motion probe ./promo --json        # 切点截图 + 正序/倒序/冷启动字节一致 + 循环接缝 + contact sheet
+node scripts/qcut.js motion render ./promo --profile draft --json   # 半分辨率快速迭代
+node scripts/qcut.js motion render ./promo --profile final --json   # 3 子帧动态模糊、峰值对齐音效、−14 LUFS
+```
+
+独立使用音乐分析：
+
+```bash
+node scripts/qcut.js audio beats assets/song.mp3 --output reports/beat-grid.json --json
+node scripts/qcut.js audio peak assets/sfx/click.wav --json
+```
+
+方法论见 [references/code-motion-direction.md](references/code-motion-direction.md)，可复制的导演信模板见 [references/motion-prompt-patterns.md](references/motion-prompt-patterns.md)，调研来源见 [reports/prior-art-research.md](reports/prior-art-research.md)。
+
+### 竖屏概念解释工作流
+
+```bash
+node scripts/qcut.js explainer init ./llm-rl --topic "LLM 中的 RL" --json
+node scripts/qcut.js explainer check ./llm-rl --stage spec --json
+node scripts/qcut.js explainer materialize ./llm-rl --json
+# TTS 返回后：使用命令返回的项目相对音频路径
+node scripts/qcut.js explainer timing ./llm-rl --audio assets/generated/narration.mp3 --apply --json
+node scripts/qcut.js explainer materialize ./llm-rl --json
+node scripts/qcut.js explainer check ./llm-rl --stage author --json
+node scripts/qcut.js explainer preview ./llm-rl --json
+# 查看 reports/scene-review.json 的逐场景首尾帧，再完成 reports/autopilot-review.json
+node scripts/qcut.js explainer final ./llm-rl --json
+```
+
+Autopilot 创建七段 scene plan、专业基础样式和 author/review/final 门。`--duration` 表示包含默认 1.5 秒封面的总成片时长，正文预算会自动扣除封面。每个 scene 还声明唯一认知任务、真实组件主焦点和可见变化；mechanism 没有变化会在 spec gate 失败。preview 自动生成每场景首尾两帧和 soft review。HTML/SVG 捕获默认断网，CSS/Web Animations 按帧设置确定时间，PNG buffer 直接通过 `image2pipe` 进入 ffmpeg，不创建逐帧 PNG 目录。
+
+### 影视英语混剪快速通道
+
+```bash
+node scripts/qcut.js english-mix init ./daily-english \
+  --phrases "That makes sense|I see what you mean|That works for me|Let me get back to you" \
+  --clips-per-phrase 4 --json
+
+# 先填写 source-selection.json 的 subtitleWindow，再创建可能消耗积分的任务
+node scripts/qcut.js english-mix audit ./daily-english --strict-boundaries --json
+
+# 下载后检查音视频流、重复素材与字幕证据
+node scripts/qcut.js english-mix audit ./daily-english --require-media --strict-boundaries --json
+
+# 先裁掉首尾残句，再生成舒适版派生：前 60ms、后 500ms 静音停留并带 40/160ms 音频淡入淡出
+node scripts/qcut.js english-mix pace ./daily-english --crossfade-ms 200 --apply --json
+
+# 预览后生成素材总览和最长英文字幕的手机审查帧
+node scripts/qcut.js english-mix review ./daily-english --frames 8 --json
+```
+
+同构标题卡、短语卡和片尾卡使用 `qcut scene batch`，共用一次 Chrome 会话：
+
+```bash
+node scripts/qcut.js scene batch ./daily-english scenes-batch.json --json
+```
+
+完整字段、付费任务恢复策略和验收顺序见 [`references/english-mix-fast-path.md`](references/english-mix-fast-path.md)。
+
 检查本机能力：
 
 ```bash
@@ -107,7 +185,7 @@ node scripts/qcut.js doctor --json
 node scripts/qcut.js 33tc search "dig deeper" --limit 8 --json
 ```
 
-`qcut 33tc` 原样透传内置的 `search`、`pick`、`cut`、`tasks`、`download`、`me` 子命令。`pick` 和 `cut` 会创建剪辑任务，可能消耗账号积分；先核对影片、时间范围和输出目录，只有明确确认后才加 `--yes`。skill 不会替你静默确认。
+`qcut 33tc` 原样透传内置的 `search`、`pick`、`cut`、`tasks`、`download`、`me` 子命令。`pick` 和 `cut` 会创建剪辑任务，可能消耗账号积分；先核对影片、时间范围和输出目录，只有明确确认后才加 `--yes`。skill 不会替你静默确认。远程媒体下载默认启用有界重连；如果创建后返回了 task ID 但下载失败，先运行 `qcut 33tc download TASK_ID --no-status` 恢复，禁止重复提交付费任务。
 
 检查 ListenHub/MarsWave 能力（只读，不消耗积分）：
 
@@ -154,15 +232,15 @@ node scripts/qcut.js ingest ./excavator-video /path/to/generated.mp4 \
 
 ### 讲解旁白默认策略
 
-讲解/口播音频优先使用 ListenHub，默认期望的 speaker/voice 名称是“向阳乔木”。默认使用专用闭环命令，不要手工拼 speaker ID：
+讲解/口播音频优先使用 ListenHub，默认期望的 speaker/voice 名称是“向阳乔木 v1.1”。默认使用专用闭环命令，不要手工拼 speaker ID：
 
 ```bash
 node scripts/qcut.js listenhub narration \
   --text-file scripts/narration.txt \
-  --qcut-project ./excavator-video --yes --json
+  --qcut-project ./excavator-video --voice-name "向阳乔木 v1.1" --yes --json
 ```
 
-该命令自动执行只读 speaker list，在本地对“向阳乔木”做唯一完全匹配，再调用 TTS、验证音频签名与所选容器、导入 `assets-manifest.json`、清理 staging，并返回可直接写入时间线的 `timelineNarration`。默认输出无损 WAV，避免 MP3 解码后再编码 AAC 的二次有损；需要节省空间时可显式 `--format mp3`。Manifest 会记录 speaker ID/name、speaker catalog 摘要、旁白文本摘要、任务/capture/model/积分等 provenance。找不到、同名多个、账号未授权或调用失败时立即停止，不会悄悄改用其他音色；此时只能使用用户已提供的 file narration，或请用户选择。
+该命令自动执行只读 speaker list，在本地对“向阳乔木 v1.1”做唯一完全匹配，再调用 TTS、验证音频签名与所选容器、导入 `assets-manifest.json`，并返回可直接写入时间线的 `timelineNarration`。默认输出 MP3，避免当前 provider 的 WAV 容器不一致导致失败和二次计费；明确需要时仍可传 `--format wav`。格式不匹配的已签名音频会保留在项目私有 staging 供检查，不会自动再提交一次付费任务。Manifest 会记录 speaker、文本、任务、模型和积分 provenance。
 
 当前 OpenAPI TTS 没有已验证的 estimate 子命令，因此调用前必须明说“费用/积分未知”并取得本次 `--yes`；`--yes=false` 等伪确认会被拒绝。`--text-file` 必须是项目内普通文件，也可用 `--text` 传短文本。最终旁白统一以带 manifest 身份校验的 `narration.engine=file` 进入 timeline。原始 `openapi speakers/tts` 透传仅用于调试，不是默认工作流。
 
@@ -313,6 +391,7 @@ node scripts/qcut.js verify ./final.mp4 --json
 | `stock-story` | 免费素材科普、儿童启蒙、行业介绍、B-roll 故事 |
 | `person-profile` | 人物介绍、企业家传记、历史人物、档案短片 |
 | `explainer` | 数学/算法/科学解释，Manim/3Blue1Brown 风格 |
+| `explainer-social` | 竖屏知识点/概念动画，HTML/SVG/Manim + 动态字幕 + SFX + 转场 |
 | `cinematic-short` | AI 视觉叙事、概念片、预告片、电影感短片 |
 | `product-launch` | 网站/App/AI 工具发布视频，网页动效融入 |
 | `social-short` | 抖音/小红书/TikTok 竖屏强节奏短视频 |
@@ -326,7 +405,7 @@ node scripts/qcut.js verify ./final.mp4 --json
 
 ## 素材源
 
-- 33台词：影视台词搜索和片段工作流。公开 skill 只委托独立安装的 `33tc` adapter，不捆绑 App 私有协议；wrapper 会清洗结构化 token/cookie/password 字段和 URL，外部 adapter 仍必须保证不输出无字段标签的裸凭据。`pick` / `cut` 在 wrapper 层要求裸 `--yes`，`--yes=false` 不算确认且不会调用外部 adapter。
+- 33台词：影视台词搜索和片段工作流。公开 skill 只委托独立安装的 `33tc` adapter，不捆绑 App 私有协议；wrapper 会清洗结构化 token/cookie/password 字段和 URL，外部 adapter 仍必须保证不输出无字段标签的裸凭据。`pick` / `cut` 在 wrapper 层要求裸 `--yes`，`--yes=false` 不算确认且不会调用外部 adapter；下载层提供有界重连，已创建任务优先恢复而不是重建。
 - ClipSeek：免费素材搜索聚合。已实现只读搜索 adapter。
 - Pexels / Pixabay：通过 ClipSeek 结果回到原站确认下载和许可。
 - 本地文件：用户提供的素材优先，不覆盖原文件。
@@ -413,44 +492,7 @@ qiaomu-cut 借鉴这些公开项目的方法和思想，不复制其私有内容
 | `QIAOMU_COLI_CLI` | 本地 ASR 可选 | 覆盖 `coli` CLI 路径；默认从 `PATH` 查找 |
 | `LISTENHUB_API_KEY` | OpenAPI 工作流可选 | 环境变量优先，也可使用官方本机 credential store；均不写入项目或仓库，命令参数禁传 key；若已在聊天/日志明文暴露，应立即撤销并轮换 |
 
-`missing evidence`：未运行任何 ListenHub 付费生成；只有本机 CLI 能力/status、mock 门禁和本地 adapter 证据。Provider 输入保留期、训练使用、数据地域与下游删除策略未知；未找到 33台词公开 API 文档，因此公开包没有宣称“只装 App 即零额外配置”；与浏览器编辑器的工程互导仍是后续接口。
-
----
-
-<a name="english"></a>
-# English
-
-qiaomu-cut is an agent-native video director skill. A short brief becomes a reproducible project with governed sourcing, shot planning, bilingual captions, brand cards, narration routing, ffmpeg rendering, and evidence-backed verification.
-
-## What is included
-
-- `QiaoCut IR` planning and deterministic timeline rendering.
-- Preview, standard, and final render profiles.
-- Three-layer bilingual ASS captions with mobile-safe typography.
-- Twenty selectable intro/outro families; internal template metadata never appears in public video.
-- Complete-sentence clip boundaries and quality-over-count deduplication.
-- Local media, ClipSeek discovery, governed 33tc adapters, and ListenHub/MarsWave provider routing.
-- Asset manifests, provenance, licensing boundaries, render reports, and no-clobber path checks.
-
-## Install and verify
-
-```bash
-npx skills add joeseesun/qiaomu-cut-skill --skill qiaomu-cut
-node ~/.agents/skills/qiaomu-cut/scripts/qcut.js doctor --json
-```
-
-For development:
-
-```bash
-npm run validate
-npm run release-check
-```
-
-Node.js 18+ is required. ListenHub integration requires Node.js 20+. Full rendering needs an ffmpeg build with libass, drawtext, overlay, loudnorm, and H.264 support.
-
-## Security, privacy, and limits
-
-Remote creation may cost credits and always requires explicit `--yes`; uploading local media also requires `--allow-upload`. Credentials stay in environment variables or provider-owned local stores and must never enter commands, manifests, captures, or Git. A downloadable movie clip is not automatically licensed for redistribution. See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the Chinese sections above for the complete trust and licensing model.
+`missing evidence`：未运行任何 ListenHub 付费生成；只有本机 CLI 能力/status、mock 门禁和本地 adapter 证据。Provider 输入保留期、训练使用、数据地域与下游删除策略未知；`qiaomu-cut-skill` 公开仓库发布与 `npx skills add` clean install 尚需验证；未找到 33台词公开 API 文档，因此公开包没有宣称“只装 App 即零额外配置”；与浏览器编辑器的工程互导仍是后续接口。
 
 <!-- qiaomu-profile:start -->
 ## 关于向阳乔木

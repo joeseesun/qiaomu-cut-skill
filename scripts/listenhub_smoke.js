@@ -61,7 +61,7 @@ if (args[0] === 'image' && args[1] === 'create') {
   process.stdout.write(JSON.stringify({ taskId: args[2], model: 'fixture-video-model', creditCharged: 7, videoUrl: 'https://cdn.example.test/private-capability-token/video.mp4?sig=fixture' }));
 } else if (args[0] === 'openapi' && args[1] === 'speakers' && args[2] === 'list') {
   process.stdout.write(JSON.stringify({ speakers: [
-    { speakerId: 'speaker-xiangyang-qiaomu', displayName: '向阳乔木' },
+    { speakerId: 'speaker-xiangyang-qiaomu', displayName: '向阳乔木 v1.1' },
     { speakerId: 'speaker-other', displayName: '其他音色' }
   ] }));
 } else if (args[0] === 'openapi' && args[1] === 'tts') {
@@ -96,6 +96,9 @@ if (args[0] === 'image' && args[1] === 'create') {
 
 function main() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qiaomu-cut-listenhub-'));
+  // Default-deny assertions below must not read the running machine's real
+  // standing authorization file, or a locally authorized user fails the suite.
+  process.env.QIAOMU_CUT_LOCAL_PREFERENCES = path.join(temp, 'missing-local-preferences.json');
   const project = path.join(temp, 'project');
   const fakeCli = path.join(temp, 'listenhub-fixture');
   const wrongVersionCli = path.join(temp, 'listenhub-wrong-version');
@@ -475,28 +478,28 @@ function main() {
       /Unknown narration option/
     );
     assert.deepEqual(
-      resolveExactSpeaker({ speakers: [{ speakerId: 'one', displayName: '向阳乔木' }] }, '向阳乔木'),
-      { id: 'one', name: '向阳乔木' }
+      resolveExactSpeaker({ speakers: [{ speakerId: 'one', displayName: '向阳乔木 v1.1' }] }, '向阳乔木 v1.1'),
+      { id: 'one', name: '向阳乔木 v1.1' }
     );
     mustThrow(
       () => resolveExactSpeaker({ speakers: [
-        { speakerId: 'one', displayName: '向阳乔木' },
-        { speakerId: 'two', displayName: '向阳乔木' }
-      ] }, '向阳乔木'),
+        { speakerId: 'one', displayName: '向阳乔木 v1.1' },
+        { speakerId: 'two', displayName: '向阳乔木 v1.1' }
+      ] }, '向阳乔木 v1.1'),
       /More than one/
     );
     const narration = synthesizeNarration([
       '--text', '测试讲解', '--qcut-project', project, '--yes', '--json'
     ], providerOptions);
-    assert.equal(narration.speaker.name, '向阳乔木');
+    assert.equal(narration.speaker.name, '向阳乔木 v1.1');
     assert.equal(narration.speaker.id, 'speaker-xiangyang-qiaomu');
-    assert.equal(narration.asset.provenance.speakerName, '向阳乔木');
+    assert.equal(narration.asset.provenance.speakerName, '向阳乔木 v1.1');
     assert.equal(narration.asset.provenance.speakerId, 'speaker-xiangyang-qiaomu');
     assert.match(narration.asset.provenance.speakerCatalogSha256, /^[a-f0-9]{64}$/);
     assert.match(narration.narrationTextSha256, /^[a-f0-9]{64}$/);
     assert.equal(narration.timelineNarration.engine, 'file');
     assert.equal(narration.timelineNarration.assetId, narration.asset.id);
-    assert(narration.localPath.endsWith('.wav'));
+    assert(narration.localPath.endsWith('.mp3'));
     assert.equal(fs.existsSync(path.join(project, narration.localPath)), true);
     assert.equal(fs.existsSync(path.join(project, '.qiaocut', 'staging', 'listenhub')), true);
     assert.equal(fs.readdirSync(path.join(project, '.qiaocut', 'staging', 'listenhub')).length, 0);

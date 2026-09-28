@@ -14,7 +14,8 @@ const MEDIA_BLOCKLIST = new Set([
 ]);
 // Only Git internals are excluded. Runtime/config/dependency directories must be
 // absent or clean before release; otherwise they could hide a force-added secret.
-const SKIP_ROOT_DIRS = new Set(['.git']);
+// .deps holds locally installed runtime packages (qcut setup); it is gitignored and never published.
+const SKIP_ROOT_DIRS = new Set(['.git', '.deps', 'node_modules']);
 const VENDOR_SYMLINK_ROOT = path.join('vendor', 'marswaveai-skills');
 
 function escapeRegExp(value) {

@@ -8,14 +8,15 @@ const { projectPath } = require('./render_project');
 const { importAsset } = require('./ingest_asset');
 const { inferredProvenance, validateSignature } = require('./fetch_generated');
 const { executeListenHub, redactSecrets } = require('./adapters/listenhub');
+const { hasPersistentCreditAuthorization } = require('./local_preferences');
 
-const DEFAULT_VOICE_NAME = '向阳乔木';
+const DEFAULT_VOICE_NAME = '向阳乔木 v1.1';
 const MAX_TEXT_BYTES = 128 * 1024;
 const STAGING_ROOT = path.join('.qiaocut', 'staging', 'listenhub');
 
 function parseArgs(argv) {
   const flags = {};
-  const booleans = new Set(['yes', 'json']);
+  const booleans = new Set(['yes', 'json', 'no-yes']);
   const allowed = new Set([
     ...booleans,
     'attribution', 'credits', 'format', 'language', 'model', 'output', 'qcut-project',
@@ -138,13 +139,22 @@ function validateRequestedAudioFormat(file, format) {
 
 function synthesizeNarration(argv, options = {}) {
   const flags = parseArgs(argv);
-  if (!flags.yes) throw new Error('ListenHub narration may consume credits. Review the text and re-run with --yes.');
+  // Explicit --no-yes still refuses; a machine-private local-user grant replaces the per-run prompt.
+  if (flags['no-yes'] && flags.yes) throw new Error('--yes and --no-yes cannot be combined.');
+  if (flags['no-yes']) throw new Error('ListenHub narration refused by --no-yes.');
+  const standingConsent = hasPersistentCreditAuthorization('listenhub');
+  if (!flags.yes && !standingConsent) {
+    throw new Error('ListenHub narration may consume credits. Review the text and re-run with --yes.');
+  }
+  if (!flags.yes && standingConsent) {
+    process.stderr.write('qiaomu-cut: applied the local user persistent authorization for ListenHub narration credits.\n');
+  }
   if (!flags['qcut-project']) throw new Error('ListenHub narration requires --qcut-project <project-dir>.');
   const projectRoot = fs.realpathSync(path.resolve(flags['qcut-project']));
   const text = readNarrationText(projectRoot, flags);
   const language = String(flags.language || 'zh');
   const voiceName = String(flags['voice-name'] || DEFAULT_VOICE_NAME).normalize('NFKC').trim();
-  const format = String(flags.format || 'wav').toLowerCase();
+  const format = String(flags.format || 'mp3').toLowerCase();
   if (!['mp3', 'wav'].includes(format)) throw new Error('--format must be mp3 or wav.');
   const textSha256 = crypto.createHash('sha256').update(text).digest('hex');
   const speakerList = executeListenHub(
@@ -209,7 +219,11 @@ function synthesizeNarration(argv, options = {}) {
       }
     };
   } catch (error) {
-    if (generated || fs.existsSync(staging.output)) {
+    const preserveForInspection = fs.existsSync(staging.output)
+      && /does not match the requested .* format/.test(String(error.message || ''));
+    if (preserveForInspection) {
+      error.message = `${error.message} Rejected audio was retained at ${staging.relative}; inspect or transcode it locally before considering another paid request.`;
+    } else if (generated || fs.existsSync(staging.output)) {
       try { fs.unlinkSync(staging.output); } catch (_) {}
     }
     throw error;

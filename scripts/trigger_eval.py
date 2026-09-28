@@ -6,7 +6,8 @@ from pathlib import Path
 
 TRIGGER_HINTS = [
     "视频", "剪辑", "混剪", "字幕", "电影", "素材", "片头", "转场",
-    "运镜", "口播", "科普", "介绍", "short", "video", "edit", "montage"
+    "运镜", "口播", "科普", "介绍", "short", "video", "edit", "montage",
+    "动态图形", "动效视频", "动画", "showreel", "mv", "motion graphic", "kinetic typography"
 ]
 
 EXPLICIT_NON_VIDEO_HINTS = [

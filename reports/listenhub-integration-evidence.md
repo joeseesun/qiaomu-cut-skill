@@ -6,7 +6,7 @@ Owner: 向阳乔木
 
 ## input_files
 
-- `vendor/marswaveai-skills/` — exact upstream Git-tracked snapshot.
+- `vendor/marswaveai-skills/` — upstream snapshot with the independently discoverable `content-parser/SKILL.md` entrypoint quarantined; supporting reference files remain.
 - `vendor/marswaveai-skills.UPSTREAM.lock.json` — repository, commit, tree, license and content digest.
 - `references/listenhub-provider.md` — normalized qiaomu-cut provider contract.
 - `scripts/adapters/listenhub.js` — runtime gates, redaction, capability detection and private capture.

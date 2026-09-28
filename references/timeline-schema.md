@@ -69,6 +69,24 @@ project/
 
 `shots[].duration` 总和必须等于 `output.duration`。所有档位采用 H.264 High / yuv420p / BT.709、AAC 48 kHz stereo；`preview` / `standard` 使用单遍 loudnorm，`final` 使用两遍 loudnorm。
 
+## 镜头转场
+
+转场写在后一个镜头上，表示“从上一镜头进入当前镜头”。首镜头不能有非零转场。
+
+```json
+{
+  "id": "s02",
+  "kind": "video",
+  "path": "assets/scenes/mechanism.mp4",
+  "duration": 4,
+  "transition": { "type": "fade", "duration": 0.25 }
+}
+```
+
+支持 `cut`、`fade`、`dissolve`、四向 `wipe/slide/smooth`、`circleopen/circleclose`和 `pixelize`。非零转场同时对画面做 `xfade`、对镜头原声做 `acrossfade`。
+
+> 存在重叠转场时，`output.duration = sum(shots[].duration) - sum(transition.duration)`。
+
 ## 双语三层字幕
 
 `captionSource` 接受两种写法。紧凑的 `cues` 会自动展开为英文、中文、顶部注释三层：
@@ -92,11 +110,34 @@ project/
 
 复杂排版可直接提供 `events`，支持 `English`、`Chinese`、`Note`、`Source`、`Card`、`CardChinese`、`BigWord`、`BigChinese` 样式。`[[文字]]` 会变成强调色。
 
+### 动态字幕
+
+`events[]` 可使用 `animation: fade|none|pop|slide-up|word-follow|karaoke|typewriter`。逐词模式建议显式给出 `segments`，避免中文自动按字切分不符合语义节奏。
+
+```json
+{
+  "start": 0.2,
+  "end": 2.2,
+  "style": "BigChinese",
+  "text": "模型看到的是 Token",
+  "animation": "word-follow",
+  "segments": [
+    { "text": "模型看到的 ", "durationMs": 900 },
+    { "text": "是 ", "durationMs": 250 },
+    { "text": "Token", "durationMs": 850 }
+  ]
+}
+```
+
+`slide-up` 需要 `pos: [x, y]`才能建立明确运动路径。`word-follow/karaoke/typewriter` 底层使用 ASS karaoke timing，可在无浏览器的终稿渲染中复现。
+
+`pos` 默认使用 timeline 原始输出画布作为作者坐标系，例如竖屏为 1080×1920。preview/standard 改变分辨率时会同比缩放坐标和 slide-up 位移；不要为不同 profile 维护两套位置。
+
 若 timeline 明确设置 `fontsDir`，渲染器优先使用项目内字体。没有设置时，会查找本机已经安装的 Noto Sans CJK SC，并复制到项目私有的 `.qiaocut/cache/fonts/`，以隔离 Fontconfig 并稳定本机渲染；这只是本地缓存，不属于项目素材。
 
 skill、Git 仓库和发布包不得捆绑、上传或再分发从用户机器发现的字体。跨机器复现若需要固定字体，应由项目维护者自行选择具有相应再分发许可的字体，记录许可证后再配置 `fontsDir`。找不到中文字形时，渲染器会明确失败或留下未验证状态，不会悄悄输出缺字成片。
 
-## 旁白与音乐
+## 旁白、音乐与独立音效
 
 `narration` 可以内联，也可以指向项目内 JSON。本机确定性 TTS 后端为 `macos-say`：
 
@@ -129,6 +170,49 @@ ListenHub TTS、ListenHub Voice、播客片段或用户录音先下载/导入项
 ```
 
 渲染器会把文件旁白转换为 48 kHz stereo、应用 trim/start/gain，并限制在成片时长内。声明 `provider=listenhub` 时必须带 asset/speaker/text provenance，且渲染前会校验 manifest 的 path、文件 SHA-256、speaker 与文本摘要；文件被替换会失败。远端临时 URL 不能直接写入 timeline。非 macOS 环境可使用 `file`，或设 `narration.engine` 为 `none`。程序音乐由固定 seed 合成，因此同一时间线可重复得到相同结果；`music: false` 可关闭音乐，`music.mode: file` 可使用项目内现成音频。
+
+按钮、切分、吸附、转折等画面音效使用顶层 `soundEffects[]`：
+
+```json
+{
+  "soundEffects": [
+    {
+      "id": "token-snap",
+      "path": "assets/audio/token-snap.wav",
+      "start": 3.42,
+      "trim": 0,
+      "duration": 0.28,
+      "gain": 0.7,
+      "fadeInMs": 8,
+      "fadeOutMs": 60
+    }
+  ],
+  "audio": { "sfxGain": 1 }
+}
+```
+
+设置 `"alignPeak": true` 时，`start` 表示**画面命中时刻**而不是文件起点：渲染器用 `qcut audio peak` 同一算法测出音效峰值偏移，把文件提前放置，让实测峰值正好落在事件帧上（起点不足时自动增加 trim）。render report 的 cue 会记录 `hitAt`、`peakMs` 和实际 `start`。所有 UI 点击、吸附、落位类音效默认应开启 `alignPeak`。
+
+音效会先按各自时间码归一化为 48 kHz stereo，再与原声、旁白和被旁链压低的音乐混合。独立音效默认不参与音乐 ducking，预览时必须人工检查是否遮挡旁白。
+
+多部电影原声直接拼接时，可显式使用 `audio.masteringMode: "montage"`。它会在 loudnorm 前加入温和动态压缩，收拢不同年代、不同混音规格素材的瞬时差异；`default` 或省略字段保持现有行为。该模式不替代 final 的两遍响度与真峰值检查。
+
+## HTML / SVG / Manim 场景资产
+
+时间线仍只接收已落盘的 `image/video`，不在 final render 期间临时运行任意网页或 Python。先使用：
+
+```bash
+node scripts/qcut.js scene render ./project scenes/token.html \
+  --engine html --output assets/scenes/token.mp4 \
+  --duration 4 --width 1080 --height 1920 --fps 30
+
+node scripts/qcut.js scene render ./project scenes/attention.py \
+  --engine manim --scene-class AttentionMap \
+  --output assets/scenes/attention.mp4 \
+  --duration 6 --width 1080 --height 1920 --fps 30
+```
+
+然后将输出 MP4 作为 `shots[].kind=video` 的项目内素材。HTML/SVG 的 PNG buffer 通过 `image2pipe` 直接进入 ffmpeg，不建立逐帧 PNG 目录；这个两阶段设计仍保留场景 MP4，便于缓存、评审、重试和跨时间线复用。
 
 ## 渲染接口
 

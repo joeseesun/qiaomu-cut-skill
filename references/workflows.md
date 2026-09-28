@@ -6,15 +6,18 @@
 
 | ID | 名称 | 典型输入 | 推荐素材源 | 推荐渲染器 |
 |---|---|---|---|---|
-| `english-mix` | 影视英语学习混剪 | “找几句电影里骂人的话做英语学习视频” | 33tc、本地字幕、AI 词卡 | ffmpeg-full、ASS |
+| `english-mix` | 影视英语学习混剪 | “找几句电影里骂人的话做英语学习视频” | 33tc、本地字幕、HTML 词卡 | english-mix init/audit/review、scene batch、ffmpeg-full、ASS |
+| `movie-montage` | 影视动作 / 舞蹈高能混剪 | “提取 10 段经典影视舞蹈镜头，要很帅” | 33tc、本地宽范围片段、品牌卡 | movie-montage init/review、动作窗口、双竖屏裁切、montage mastering |
 | `stock-story` | 免费素材故事片 | “用免费素材讲挖掘机” | ClipSeek、Pexels、Pixabay、imagegen | ffmpeg-full、HTML cards |
 | `person-profile` | 人物档案短片 | “介绍某个人的一生” | web-info、Wikimedia、本地照片、AI 图 | HTML cards、ffmpeg |
 | `explainer` | 科普解释动画 | “解释 attention 机制” | Manim、SVG、HTML、imagegen | manim、html、ffmpeg |
+| `explainer-social` | 竖屏概念动画短视频 | “制作一个科普视频：介绍 LLM 中的 RL” | HTML/SVG/Manim、向阳乔木 v1.1、SFX | explainer autopilot、image2pipe scene render、动态 ASS、ffmpeg-full |
 | `cinematic-short` | 电影感短片 | “做一个城市孤独感短片” | imagegen、ClipSeek、本地素材 | ffmpeg、color grade |
 | `product-launch` | 产品发布片 | “给我的网站做 launch video” | browser capture、HTML、Motion、本地 logo | html、motion、ffmpeg |
 | `social-short` | 竖屏强节奏短视频 | “做一个小红书风格短视频” | 本地视频、B-roll、imagegen | ffmpeg、字幕包装 |
 | `talking-head` | 口播精剪 | “剪掉停顿，加字幕和 B-roll” | 本地口播、BaoCut 可选、ClipSeek | baocut、ffmpeg |
 | `data-story` | 数据故事 | “把这份报告做成视频” | CSV/Sheet、HTML charts、SVG | html、motion、ffmpeg |
+| `motion-design` | 代码动态图形 | “做一个 15 秒 showreel / UI 动效循环 / 卡点产品片 / 歌词 MV” | 代码绘制、用户真实截图与片段、授权音乐 | qcut motion init/check/probe/render、qcut audio beats、子帧动态模糊 |
 | `hybrid-studio` | 复杂项目 | “做一条客户级品牌故事片” | 多源组合 | 多渲染器 |
 
 ## 更多可组合工作流
@@ -75,13 +78,17 @@
 ## 工作流选择规则
 
 1. 如果用户明确要“影视台词/电影片段/英语学习”，优先 `english-mix`。
-2. 如果用户强调“免费素材/照片/插画/视频资源库”，优先 `stock-story`。
-3. 如果是人物、公司或历史对象，优先 `person-profile` 或 `mini-documentary`。
-4. 如果要解释抽象概念，优先 `explainer`。
-5. 如果要产品/网站/App，优先 `product-launch`。
-6. 如果平台是抖音、小红书、TikTok，优先 `social-short`。
-7. 如果输入是本地口播，优先 `talking-head`。
-8. 多个目标冲突时进入 `hybrid-studio`，先生成 IR 和分镜，不急着渲染。
+   先走 `references/english-mix-fast-path.md`：付费前严格上下文门，下载后音视频/SHA 审计，preview 后 8 帧与手机长字幕审查。
+2. 如果用户明确要多部影视中的动作、舞蹈、打斗或耍帅高光，优先 `movie-montage`。
+   先走 `references/movie-montage-fast-path.md`：限制候选和付费次数，下载宽范围后生成动作窗口与竖屏裁切证据，人工语义审片后才锁定。
+3. 如果用户强调“免费素材/照片/插画/视频资源库”，优先 `stock-story`。
+4. 如果是人物、公司或历史对象，优先 `person-profile` 或 `mini-documentary`。
+5. 如果要解释抽象概念，优先 `explainer`。
+6. “制作/做一个科普视频：介绍……”直接进入 `explainer-social`；抽象概念解释同时命中抖音/小红书/TikTok/竖屏时也进入该工作流，不再路由成 `talking-head`。
+7. 如果要产品/网站/App，优先 `product-launch`。
+8. 如果只强调平台节奏而不是抽象机制解释，优先 `social-short`。
+9. 如果输入是本地口播，优先 `talking-head`。
+10. 多个目标冲突时进入 `hybrid-studio`，先生成 IR 和分镜，不急着渲染。
 
 ## 输出默认值
 
@@ -91,3 +98,15 @@
 | YouTube 横屏 | 16:9 | -16 LUFS | 双语或章节字幕 |
 | 课程/演示 | 16:9 | -16 LUFS | 清晰小标题 + 重点高亮 |
 | 电影感短片 | 21:9/16:9 | -16 LUFS | 克制字幕或无字幕 |
+
+
+## motion-design 组合配方
+
+完整方法见 `code-motion-direction.md`，提示词模板见 `motion-prompt-patterns.md`。
+
+- **UI 动效循环**：`--style ui-morph-loop --loop`；一个形状从不硬切，光标驱动；probe 检查首尾接缝。
+- **卡点产品片**：`--style product-promo --audio song.mp3`；切点在强拍、drop 对应展开镜头；真实截图/片段抽成 JPEG 序列后按 t 换帧。
+- **线稿科普**：旁白与事实走 `explainer-social`，画面用 `line-art-explainer` 的 motion 项目渲染成 MP4 后作为 timeline shot。
+- **口播改线稿**：`talking-head` 原片保持原声、字幕、时长；ASR 分段 → 每段一个线稿场景 → timeline 叠加右下角圆形画中画。
+- **歌词 MV**：`--style lyric-mv --audio song`；歌词时间取自 ASR 或用户歌词时间轴，写入 storyboard events；只用用户有权使用的歌曲。
+- **混合写实**：需要真人/实景时先经付费门调用视频模型出底片，再抽帧由代码重绘或排版（转描风格），交付中标明 AI 生成部分。

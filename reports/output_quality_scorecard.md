@@ -1,4 +1,4 @@
-# Output Quality Scorecard — v0.4.0
+# Output Quality Scorecard — v0.8.0
 
 用于每个真实视频项目完成前的人工/自动检查。`preview` 通过只代表可以继续迭代；公开发布必须以 `final + full`、字幕字体已验证且 `releaseReady: true` 为技术门，再补齐人工审看与素材权利证据。
 
@@ -21,12 +21,20 @@
 | Provider generation | 远端创建有本次确认、费用估算/未知费用声明、任务 ID、模型和实际积分字段 | missing evidence：未运行付费 provider fixture |
 | Provider upload | 上传本地参考文件前有独立 `--allow-upload` 证据 | pass：mock gate；真实上传未执行 |
 | Generated asset | 临时 URL 已本地化，SHA-256/MIME/媒体签名通过，manifest 不含签名 URL | pass：mock adapter + 本地 ingest；真实 provider 下载未执行 |
-| Narration identity | 新中文讲解默认优先 ListenHub；“向阳乔木”精确解析到当前 speaker ID，缺失/歧义时不静默换人；asset/path/content SHA/speaker/text 可审计 | deterministic gate pass；真实账号 speaker 与付费 TTS blind review 等密钥轮换后仍属 missing evidence |
+| Narration identity | 新中文讲解默认优先 ListenHub；“向阳乔木 v1.1”精确解析、默认 MP3，缺失/歧义时不换人，失败后不自动二次付费 | deterministic gate pass；真实项目仍需记录 provider 实际积分与人工听审 |
+| Narration timing | 音频 SHA-256 与 ffprobe 实测 duration 写入 `narration-timing.json`；静音边界不完整时标记 duration-level，不冒充 phrase/word | pass：`scripts/explainer_cognitive_timing_smoke.js`；真实 ListenHub 音频仍需逐项目听审 |
 | Image direction | 生图有内容推导的 visual bible，主体/年代/情绪/色板/光线/构图/字幕留白与成片一致 | concrete plan gate pass（唐代李白水墨 fixture）；每个真实项目仍需 contact sheet 人工连续性审查 |
 | License | 外部素材有 licenseStatus 和 attribution | warn：Pexels 已核验；33tc 仅私人学习演示 |
 | Video | 有视频流，分辨率符合目标平台 | pass：1080×1920 / H.264 / 30 fps |
 | Audio | 有音频流或明确无音频原因 | pass：AAC 48 kHz stereo |
 | Captions | 字幕在安全区，拼写和断句可读 | pass：20 帧 contact sheet 人工抽查 |
+| Kinetic captions | `word-follow/karaoke/typewriter/pop/slide-up` 时间标签可复现，不溢出安全区 | pass：`scripts/kinetic_caption_smoke.js`；真实项目仍需手机尺寸预览 |
+| Scene render | HTML/SVG 断网按帧捕获并以 image2pipe 直接编码、零 PNG 帧文件；Manim 尺寸/帧率/时长归一化 | pass：`scripts/scene_renderer_smoke.js` 真实 Chrome Headless + Manim |
+| Explainer Autopilot | 一句话初始化、author gate、增量场景、preview、人工 review、final/full 全链路可执行 | pass：`scripts/explainer_e2e_smoke.js`，final `releaseReady=true`，二次场景缓存命中 5/5 |
+| Cognitive scene contract | 新 scene 有唯一 `cognitiveTask`、真实 `primaryFocus` 和可见 `visibleChange`；mechanism 无变化时硬阻断 | pass：`scripts/explainer_pipeline_smoke.js` cognitive-contract-gate |
+| Start/end scene review | preview 为每个 scene 导出首尾证据并生成四项 soft review；内容变化后旧判断失效 | pass：`scripts/explainer_e2e_smoke.js` 6 scenes / 12 frames；真实项目仍需填写 review |
+| Aesthetic gate | 卡片/引用/callout 不使用左侧彩色竖线，字幕不与图内完整句重复 | pass：`scripts/explainer_pipeline_smoke.js` lint 与重复检测；真实项目仍需 contact sheet 人工审美检查 |
+| Transitions/SFX | 转场重叠后时长一致，SFX 按 start/trim/gain/fade 混合并进入报告 | pass：`scripts/timeline_features_smoke.js` 真实 ffmpeg 渲染 |
 | Pacing | 前 3 秒 hook，剪辑节奏符合平台 | pass：人工抽查 |
 | Render | `final/full` 技术报告通过且无未审查异常 | pass：DIG final 为 0 黑帧、0 异常静音、-14 LUFS / -1.4 dBFS |
 | Profile | 正式发布必须 `profile=final`、`validation=full`、`releaseReady=true` | pass：DIG 既有 final 技术证据；v0.3 profile 报告结构已实现 |

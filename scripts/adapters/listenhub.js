@@ -6,6 +6,10 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { projectPath, ensureInternalDirectory } = require('../render_project');
+const {
+  hasPersistentCreditAuthorization,
+  hasPersistentUploadAuthorization
+} = require('../local_preferences');
 
 const MIN_NODE_MAJOR = 20;
 const LISTENHUB_PACKAGE_VERSION = '0.0.15';
@@ -423,6 +427,7 @@ function stripQcutFlags(rawArgs) {
   const args = [];
   const control = {
     confirmed: false,
+    declined: false,
     allowUpload: false,
     project: null,
     capture: null
@@ -431,6 +436,11 @@ function stripQcutFlags(rawArgs) {
     const token = rawArgs[index];
     if (token === '--yes') {
       control.confirmed = true;
+      continue;
+    }
+    // Explicit refusal always outranks a stored persistent authorization.
+    if (token === '--yes=false') {
+      control.declined = true;
       continue;
     }
     if (token === '--allow-upload') {
@@ -734,13 +744,24 @@ function executeListenHub(rawArgs, options = {}) {
   if (classification.risk === 'blocked-destructive') {
     throw new Error(`${classification.reason}. Use the upstream CLI directly only after explicitly reviewing the account impact.`);
   }
-  if (classification.risk !== 'read' && classification.risk !== 'read-sensitive' && !control.confirmed) {
+  const charged = classification.risk !== 'read' && classification.risk !== 'read-sensitive';
+  const standingConsent = charged && !control.confirmed && !control.declined &&
+    hasPersistentCreditAuthorization('listenhub');
+  if (charged && !control.confirmed && !standingConsent) {
     throw new Error(`${classification.reason} changes account state, writes remote state, or may consume credits. Review the request and re-run with --yes.`);
   }
+  if (standingConsent) {
+    process.stderr.write('qiaomu-cut: applied the local user persistent authorization for ListenHub credits; no repeated prompt was required.\n');
+  }
   const uploads = localUploadArguments(args);
-  if (uploads.length && !control.allowUpload) {
+  const standingUploadConsent = uploads.length && !control.allowUpload && !control.declined &&
+    hasPersistentUploadAuthorization('listenhub');
+  if (uploads.length && !control.allowUpload && !standingUploadConsent) {
     const names = uploads.map((item) => path.basename(item.value)).join(', ');
     throw new Error(`This request uploads local files (${names}) to a third-party service. Re-run with --allow-upload after reviewing them.`);
+  }
+  if (standingUploadConsent) {
+    process.stderr.write('qiaomu-cut: applied the local user persistent authorization for ListenHub uploads.\n');
   }
   let projectRoot = null;
   if (control.project) {
