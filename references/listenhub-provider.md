@@ -62,7 +62,7 @@ node scripts/qcut.js listenhub doctor --json
 
 ## 讲解旁白默认契约
 
-讲解、口播和课程音频优先 ListenHub，默认期望的 speaker/voice 名称为“向阳乔木”。成片默认只走专用闭环：
+讲解、口播和课程音频优先 ListenHub，默认期望的 speaker/voice 名称为“向阳乔木 v1.1”。成片默认只走专用闭环：
 
 ```bash
 node scripts/qcut.js listenhub narration \
@@ -70,7 +70,7 @@ node scripts/qcut.js listenhub narration \
   --qcut-project ./project --yes --json
 ```
 
-该命令内部运行已锁定的 `openapi speakers list --language zh -j`，在本地对名称做完全匹配，只有“唯一 + 已授权”时才取其 speaker ID。随后执行直接二进制 TTS、验证媒体签名与所选容器、自动 ingest、清理 staging，并返回 `timelineNarration`。默认生成无损 WAV，避免 MP3 → PCM → AAC 二次有损；`--format mp3` 仅作为省空间选项。Manifest 记录 speaker ID/name、speaker catalog SHA-256、旁白文本 SHA-256、任务/capture/model/积分；渲染器再校验 asset ID/path/content SHA/speaker/text 一致。零结果、同名多个、账号无权、文件被替换或 provider 拒绝时都 fail-closed，不得用模糊匹配或悄悄换另一个音色。
+该命令内部运行已锁定的 `openapi speakers list --language zh -j`，在本地对名称做完全匹配，只有“唯一 + 已授权”时才取其 speaker ID。随后执行直接二进制 TTS、验证媒体签名与所选容器、自动 ingest、清理 staging，并返回 `timelineNarration`。默认请求 MP3：这是针对当前 provider 实测 WAV 请求可能返回不同封装的可靠性选择，可避免一次失败后再次扣费。若用户明确要求仍可传 `--format wav`。容器不匹配时保留已通过音频签名检查的私有 staging 文件供本地检查/转码，禁止自动提交第二个付费任务。Manifest 记录 speaker ID/name、speaker catalog SHA-256、旁白文本 SHA-256、任务/capture/model/积分；渲染器再校验 asset ID/path/content SHA/speaker/text 一致。零结果、同名多个、账号无权、文件被替换或 provider 拒绝时都 fail-closed，不得用模糊匹配或悄悄换另一个音色。
 
 已锁定 CLI 的底层 OpenAPI TTS 是直接二进制输出命令：没有 `create` 子命令，也不使用 `--json`。当前 help 没有已验证的 TTS estimate 路由，因此专用命令执行前必须说明“费用/积分未知”并取得本次裸 `--yes`；`--yes=false` 会被拒绝。
 

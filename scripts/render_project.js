@@ -46,6 +46,11 @@ const RENDER_PROFILES = Object.freeze({
   })
 });
 const VALIDATION_LEVELS = new Set(['basic', 'standard', 'full']);
+const TRANSITION_TYPES = new Set([
+  'cut', 'fade', 'dissolve', 'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+  'slideleft', 'slideright', 'slideup', 'slidedown', 'circleopen', 'circleclose',
+  'pixelize', 'smoothleft', 'smoothright', 'smoothup', 'smoothdown'
+]);
 
 function displayPath(file) {
   if (!file || typeof file !== 'string') return file;
@@ -81,6 +86,21 @@ function stableStringify(value) {
   return JSON.stringify(stableValue(value));
 }
 
+function transitionSpec(shot) {
+  if (!shot || shot.transition == null) return { type: 'cut', duration: 0 };
+  const raw = typeof shot.transition === 'string' ? { type: shot.transition } : shot.transition;
+  const type = String(raw.type || 'cut').toLowerCase();
+  const duration = type === 'cut' ? 0 : finite(raw.duration, 0.25);
+  return { type, duration };
+}
+
+function effectiveTimelineDuration(shots) {
+  return (shots || []).reduce((total, shot, index) => {
+    const overlap = index === 0 ? 0 : transitionSpec(shot).duration;
+    return total + finite(shot.duration, 0) - overlap;
+  }, 0);
+}
+
 function suffixedPath(file, suffix) {
   const extension = path.extname(file);
   const stem = extension ? file.slice(0, -extension.length) : file;
@@ -109,6 +129,8 @@ function applyRenderProfile(sourceTimeline, options = {}) {
   timeline._renderProfile = name;
   timeline._validationLevel = validation;
   timeline._normalizationMode = profile.normalization;
+  timeline._sourceOutputWidth = finite(timeline.output.width, 0);
+  timeline._sourceOutputHeight = finite(timeline.output.height, 0);
 
   if (name !== 'final') {
     const dimensions = scaledDimensions(
@@ -352,7 +374,7 @@ function inspectDependencies() {
   const missing = requiredFilters.filter((name) => !new RegExp(`\\b${name}\\b`).test(filterText));
   if (!/\blibx264\b/.test(encoderText)) missing.push('encoder:libx264');
   if (missing.length) {
-    throw new Error(`The selected ffmpeg is missing required capabilities: ${missing.join(', ')}. Install ffmpeg-full.`);
+    throw new Error(`The selected ffmpeg is missing required capabilities: ${missing.join(', ')}. Run: qcut setup --only ffmpeg`);
   }
   return {
     ffmpeg,
@@ -419,7 +441,6 @@ function validateTimeline(timeline, projectRoot, options = {}) {
     }
   }
   const ids = new Set();
-  let declared = 0;
   const shotFiles = [];
   for (const [index, shot] of timeline.shots.entries()) {
     const label = `shots[${index}]`;
@@ -431,12 +452,21 @@ function validateTimeline(timeline, projectRoot, options = {}) {
     const shotDuration = finite(shot.duration, NaN);
     if (!Number.isFinite(shotDuration) || shotDuration <= 0) throw new Error(`${label}.duration must be positive.`);
     if (finite(shot.in, 0) < 0) throw new Error(`${label}.in cannot be negative.`);
+    const transition = transitionSpec(shot);
+    if (!TRANSITION_TYPES.has(transition.type)) throw new Error(`${label}.transition type is unsupported: ${transition.type}.`);
+    if (index === 0 && transition.duration > 0) throw new Error('The first shot cannot declare an incoming transition.');
+    if (!Number.isFinite(transition.duration) || transition.duration < 0 || transition.duration > 3) {
+      throw new Error(`${label}.transition duration must be between 0 and 3 seconds.`);
+    }
+    if (index > 0 && transition.duration >= Math.min(shotDuration, finite(timeline.shots[index - 1].duration, 0))) {
+      throw new Error(`${label}.transition duration must be shorter than both adjacent shots.`);
+    }
     shotFiles.push(projectPath(projectRoot, shot.path, `${label}.path`, { exists: true }));
-    declared += shotDuration;
   }
+  const declared = effectiveTimelineDuration(timeline.shots);
   const tolerance = Math.max(0.01, 1 / fps);
   if (Math.abs(declared - duration) > tolerance) {
-    throw new Error(`Shot duration total ${declared.toFixed(3)} does not match output.duration ${duration.toFixed(3)}.`);
+    throw new Error(`Effective shot duration ${declared.toFixed(3)} after transition overlaps does not match output.duration ${duration.toFixed(3)}.`);
   }
   const finalOutput = projectPath(projectRoot, output.file || 'renders/final.mp4', 'output.file');
   if (shotFiles.some((source) => samePath(source, finalOutput))) {
@@ -478,6 +508,29 @@ function validateTimeline(timeline, projectRoot, options = {}) {
   if (timeline.music && typeof timeline.music === 'object' && timeline.music.path) {
     projectPath(projectRoot, timeline.music.path, 'music.path');
   }
+  if (timeline.soundEffects != null && !Array.isArray(timeline.soundEffects)) {
+    throw new Error('soundEffects must be an array.');
+  }
+  if (timeline.audio != null && (!timeline.audio || typeof timeline.audio !== 'object' || Array.isArray(timeline.audio))) {
+    throw new Error('audio must be an object.');
+  }
+  if (timeline.audio && timeline.audio.masteringMode != null && !['default', 'montage'].includes(timeline.audio.masteringMode)) {
+    throw new Error('audio.masteringMode must be default or montage.');
+  }
+  for (const [index, effect] of (timeline.soundEffects || []).entries()) {
+    const label = `soundEffects[${index}]`;
+    if (!effect || typeof effect !== 'object' || Array.isArray(effect)) throw new Error(`${label} must be an object.`);
+    projectPath(projectRoot, effect.path, `${label}.path`, { exists: true });
+    const start = finite(effect.start, NaN);
+    if (!Number.isFinite(start) || start < 0 || start >= duration) throw new Error(`${label}.start is outside the timeline.`);
+    for (const field of ['trim', 'duration', 'gain', 'fadeInMs', 'fadeOutMs']) {
+      if (effect[field] != null && (!Number.isFinite(Number(effect[field])) || Number(effect[field]) < 0)) {
+        throw new Error(`${label}.${field} must be a non-negative number.`);
+      }
+    }
+    if (effect.duration != null && Number(effect.duration) <= 0) throw new Error(`${label}.duration must be greater than zero.`);
+    if (effect.gain != null && Number(effect.gain) > 4) throw new Error(`${label}.gain cannot exceed 4.`);
+  }
   if (timeline.fontsDir) projectPath(projectRoot, timeline.fontsDir, 'fontsDir', { exists: true });
   return { width, height, fps, duration };
 }
@@ -500,6 +553,12 @@ function collectProjectIO(timeline, projectRoot, timelineFile) {
   const narration = narrationSpec(timeline, projectRoot);
   if (narration && narration.engine === 'file') {
     reads.push({ label: 'narration.path', file: projectPath(projectRoot, narration.path, 'narration.path', { exists: true }) });
+  }
+  for (const [index, effect] of (timeline.soundEffects || []).entries()) {
+    reads.push({
+      label: `soundEffects[${index}].path`,
+      file: projectPath(projectRoot, effect.path, `soundEffects[${index}].path`, { exists: true })
+    });
   }
   if (typeof timeline.music === 'string') {
     reads.push({ label: 'music', file: projectPath(projectRoot, timeline.music, 'music', { exists: true }) });
@@ -721,14 +780,60 @@ function renderShot(context, shot, index) {
 }
 
 function concatSegments(context, segments) {
-  const { buildDir, tools, projectRoot, progress } = context;
+  const { buildDir, tools, projectRoot, progress, timeline } = context;
+  const transitions = timeline.shots.slice(1).map(transitionSpec);
+  const hasTransitions = transitions.some((transition) => transition.duration > 0);
+  const assembled = path.join(buildDir, 'assembled.mkv');
+  if (hasTransitions) {
+    const args = ['-hide_banner', '-loglevel', 'warning', '-y'];
+    for (const segment of segments) args.push('-i', segment);
+    const graph = [];
+    let video = '0:v';
+    let audio = '0:a';
+    let currentDuration = finite(timeline.shots[0].duration, 0);
+    for (let index = 1; index < segments.length; index += 1) {
+      const transition = transitionSpec(timeline.shots[index]);
+      const nextVideo = `${index}:v`;
+      const nextAudio = `${index}:a`;
+      const outVideo = `v${index}`;
+      const outAudio = `a${index}`;
+      if (transition.duration > 0) {
+        const offset = Math.max(0, currentDuration - transition.duration);
+        graph.push(`[${video}][${nextVideo}]xfade=transition=${transition.type}:duration=${transition.duration}:offset=${offset}[${outVideo}]`);
+        graph.push(`[${audio}][${nextAudio}]acrossfade=d=${transition.duration}:c1=tri:c2=tri[${outAudio}]`);
+        currentDuration += finite(timeline.shots[index].duration, 0) - transition.duration;
+      } else {
+        graph.push(`[${video}][${nextVideo}]concat=n=2:v=1:a=0[${outVideo}]`);
+        graph.push(`[${audio}][${nextAudio}]concat=n=2:v=0:a=1[${outAudio}]`);
+        currentDuration += finite(timeline.shots[index].duration, 0);
+      }
+      video = outVideo;
+      audio = outAudio;
+    }
+    graph.push(`[${video}]trim=duration=${timeline.output.duration},setpts=PTS-STARTPTS[vout]`);
+    graph.push(`[${audio}]atrim=duration=${timeline.output.duration},asetpts=PTS-STARTPTS[aout]`);
+    const graphFile = path.join(buildDir, 'transitions.ffscript');
+    fs.writeFileSync(graphFile, `${graph.join(';\n')}\n`, 'utf8');
+    progress(`assembling shots with ${transitions.filter((transition) => transition.duration > 0).length} transition(s)`);
+    args.push(
+      '-/filter_complex', graphFile,
+      '-map', '[vout]', '-map', '[aout]',
+      '-c:v', 'libx264', '-preset', timeline.output.intermediatePreset || 'veryfast',
+      '-crf', String(finite(timeline.output.intermediateCrf, 18)),
+      '-profile:v', 'high', '-level', timeline.output.level || '4.2', '-pix_fmt', 'yuv420p',
+      '-r', String(timeline.output.fps), '-g', String(Math.round(timeline.output.fps * 2)),
+      '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2',
+      assembled
+    );
+    run(tools.ffmpeg, args, { cwd: projectRoot });
+    return assembled;
+  }
   const list = path.join(buildDir, 'segments.txt');
   const content = segments.map((file) => {
     if (/\r|\n/.test(file)) throw new Error('Segment paths cannot contain newlines.');
     return `file '${file.replace(/'/g, "'\\''")}'`;
   }).join('\n') + '\n';
   fs.writeFileSync(list, content, 'utf8');
-  const assembled = path.join(buildDir, 'assembled.mkv');
   progress('assembling shots');
   run(tools.ffmpeg, [
     '-hide_banner', '-loglevel', 'warning', '-y',
@@ -803,6 +908,8 @@ function prepareCaptions(context) {
   const ass = generateBilingualAss(document, {
     width: timeline.output.width,
     height: timeline.output.height,
+    coordinateWidth: timeline._sourceOutputWidth,
+    coordinateHeight: timeline._sourceOutputHeight,
     font: resolvedFont.family
   });
   atomicWriteFile(output, ass, 'utf8');
@@ -1057,10 +1164,66 @@ function prepareNarration(context) {
   return { file: narration, engine: spec.engine, cues: normalized.length, voice: spec.voice || null, provenance: null };
 }
 
+function prepareSoundEffects(context) {
+  const { timeline, projectRoot, buildDir, tools, progress } = context;
+  const effects = timeline.soundEffects || [];
+  if (!effects.length) return null;
+  const output = path.join(buildDir, 'sound-effects.wav');
+  const args = ['-hide_banner', '-loglevel', 'warning', '-y'];
+  const graph = [];
+  const cues = [];
+  for (const [index, effect] of effects.entries()) {
+    const source = projectPath(projectRoot, effect.path, `soundEffects[${index}].path`, { exists: true });
+    args.push('-i', source);
+    let start = finite(effect.start, 0);
+    let trim = finite(effect.trim, 0);
+    let peakMs = null;
+    if (effect.alignPeak) {
+      // `start` is the visual hit; shift so the measured peak lands on it.
+      peakMs = require('./audio_beats').peakOffset(source, { trim }).peakMs;
+      start -= peakMs / 1000;
+      if (start < 0) { trim += -start; start = 0; }
+    }
+    const available = Math.max(0.01, durationOf(source, tools.ffprobe) - trim);
+    const duration = Math.min(
+      effect.duration == null ? available : finite(effect.duration, available),
+      timeline.output.duration - start
+    );
+    if (!(duration > 0)) throw new Error(`soundEffects[${index}] has no playable duration inside the timeline.`);
+    const filters = [
+      `atrim=start=${trim}:duration=${duration}`,
+      'asetpts=PTS-STARTPTS',
+      'aresample=48000',
+      'aformat=sample_fmts=fltp:channel_layouts=stereo',
+      `volume=${clamp(finite(effect.gain, 1), 0, 4)}`
+    ];
+    const fadeIn = Math.min(duration / 2, finite(effect.fadeInMs, 0) / 1000);
+    const fadeOut = Math.min(duration / 2, finite(effect.fadeOutMs, 0) / 1000);
+    if (fadeIn > 0) filters.push(`afade=t=in:st=0:d=${fadeIn}`);
+    if (fadeOut > 0) filters.push(`afade=t=out:st=${Math.max(0, duration - fadeOut)}:d=${fadeOut}`);
+    filters.push(`adelay=${Math.round(start * 1000)}:all=1`, `apad`, `atrim=0:${timeline.output.duration}`);
+    graph.push(`[${index}:a]${filters.join(',')}[fx${index}]`);
+    cues.push({ id: effect.id || `fx${index + 1}`, path: effect.path, start: Math.round(start * 1000) / 1000, duration, gain: clamp(finite(effect.gain, 1), 0, 4), ...(peakMs != null ? { hitAt: finite(effect.start, 0), peakMs } : {}) });
+  }
+  graph.push(`${effects.map((_, index) => `[fx${index}]`).join('')}amix=inputs=${effects.length}:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.94,atrim=0:${timeline.output.duration}[sfx]`);
+  const graphFile = path.join(buildDir, 'sound-effects.ffscript');
+  fs.writeFileSync(graphFile, `${graph.join(';\n')}\n`, 'utf8');
+  args.push(
+    '-/filter_complex', graphFile,
+    '-map', '[sfx]',
+    '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2',
+    output
+  );
+  progress(`mixing ${effects.length} sound effect cue(s)`);
+  run(tools.ffmpeg, args, { cwd: projectRoot });
+  return { file: output, cues };
+}
+
 function shotStarts(shots) {
   const starts = [];
   let cursor = 0;
-  for (const shot of shots) {
+  for (const [index, shot] of shots.entries()) {
+    if (index > 0) cursor -= transitionSpec(shot).duration;
     starts.push(Math.round(cursor * 1000) / 1000);
     cursor += finite(shot.duration, 0);
   }
@@ -1161,6 +1324,7 @@ function pictureCacheKey(context, segments, captions) {
     profile: timeline._renderProfile,
     captions: captionHash,
     segments: segmentFingerprints,
+    transitions: timeline.shots.slice(1).map(transitionSpec),
     fonts: captions
       ? fontDirectory
         ? { family: resolvedFont.family, files: fontFiles }
@@ -1241,7 +1405,7 @@ function renderPicture(context, assembled, captions, segments) {
   return cacheFile;
 }
 
-function mixAudio(context, assembled, narration, music) {
+function mixAudio(context, assembled, narration, music, soundEffects) {
   const { timeline, projectRoot, buildDir, tools, progress } = context;
   const mix = path.join(buildDir, 'mix.wav');
   const duration = finite(timeline.output.duration, 0);
@@ -1249,6 +1413,7 @@ function mixAudio(context, assembled, narration, music) {
   const args = ['-hide_banner', '-loglevel', 'warning', '-y', '-i', assembled];
   let narrationIndex = null;
   let musicIndex = null;
+  let soundEffectsIndex = null;
   if (narration) {
     narrationIndex = args.filter((value) => value === '-i').length;
     args.push('-i', narration.file);
@@ -1256,6 +1421,10 @@ function mixAudio(context, assembled, narration, music) {
   if (music) {
     musicIndex = args.filter((value) => value === '-i').length;
     args.push('-i', music.file);
+  }
+  if (soundEffects) {
+    soundEffectsIndex = args.filter((value) => value === '-i').length;
+    args.push('-i', soundEffects.file);
   }
   const graph = [];
   graph.push(`[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${clamp(finite(audio.originalGain, 1), 0, 4)}[original]`);
@@ -1269,13 +1438,24 @@ function mixAudio(context, assembled, narration, music) {
     graph.push('[speech]asplit=2[speechout][sidechain]');
     graph.push(`[${musicIndex}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${clamp(finite(audio.musicGain, 0.62), 0, 4)},highpass=f=35,lowpass=f=12000[music]`);
     graph.push(`[music][sidechain]sidechaincompress=threshold=${clamp(finite(audio.duckThreshold, 0.022), 0.0001, 1)}:ratio=${clamp(finite(audio.duckRatio, 8), 1, 20)}:attack=${clamp(finite(audio.duckAttackMs, 12), 1, 500)}:release=${clamp(finite(audio.duckReleaseMs, 380), 10, 3000)}[ducked]`);
-    graph.push(`[speechout][ducked]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.92,atrim=0:${duration}[mix]`);
+    graph.push(`[speechout][ducked]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.92,atrim=0:${duration}[bed]`);
   } else {
-    graph.push(`[speech]alimiter=limit=0.92,atrim=0:${duration}[mix]`);
+    graph.push(`[speech]alimiter=limit=0.92,atrim=0:${duration}[bed]`);
+  }
+  if (soundEffectsIndex != null) {
+    graph.push(`[${soundEffectsIndex}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${clamp(finite(audio.sfxGain, 1), 0, 4)}[sfx]`);
+    graph.push(`[bed][sfx]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.92,atrim=0:${duration}[premaster]`);
+  } else {
+    graph.push('[bed]anull[premaster]');
+  }
+  if (audio.masteringMode === 'montage') {
+    graph.push(`[premaster]acompressor=threshold=0.10:ratio=2.5:attack=12:release=180:makeup=1.5,alimiter=limit=0.92,atrim=0:${duration}[mix]`);
+  } else {
+    graph.push('[premaster]anull[mix]');
   }
   const graphFile = path.join(buildDir, 'mix.ffscript');
   fs.writeFileSync(graphFile, `${graph.join(';\n')}\n`, 'utf8');
-  progress('mixing source audio, narration, and music with sidechain ducking');
+  progress('mixing source audio, narration, music, and sound effects');
   args.push(
     '-/filter_complex', graphFile,
     '-map', '[mix]',
@@ -1626,10 +1806,11 @@ function renderProject(projectDir, options = {}) {
     const captions = timedStage(context, 'captions', () => prepareCaptions(context));
     const music = timedStage(context, 'music', () => prepareMusic(context));
     const narration = timedStage(context, 'narration', () => prepareNarration(context));
+    const soundEffects = timedStage(context, 'soundEffects', () => prepareSoundEffects(context));
     const segments = timedStage(context, 'shots', () => timeline.shots.map((shot, index) => renderShot(context, shot, index)));
     const assembled = timedStage(context, 'assemble', () => concatSegments(context, segments));
     const picture = timedStage(context, 'picture', () => renderPicture(context, assembled, captions, segments));
-    const mix = timedStage(context, 'audioMix', () => mixAudio(context, assembled, narration, music));
+    const mix = timedStage(context, 'audioMix', () => mixAudio(context, assembled, narration, music, soundEffects));
     const normalized = timedStage(context, 'normalization', () => loudnorm(context, mix));
     const finalVideo = timedStage(context, 'mux', () => muxFinal(context, picture, normalized.file));
     const sheet = timedStage(context, 'contactSheet', () => contactSheet(context, finalVideo));
@@ -1660,6 +1841,11 @@ function renderProject(projectDir, options = {}) {
       resolution: `${timeline.output.width}x${timeline.output.height}`,
       fps: timeline.output.fps,
       shots: timeline.shots.length,
+      transitions: timeline.shots.slice(1).map((shot, index) => ({
+        from: timeline.shots[index].id,
+        to: shot.id,
+        ...transitionSpec(shot)
+      })).filter((transition) => transition.duration > 0),
       captions: captions ? path.relative(projectRoot, captions) : null,
       captionFont: captions && context.resolvedCaptionFont ? {
         family: context.resolvedCaptionFont.family,
@@ -1672,6 +1858,8 @@ function renderProject(projectDir, options = {}) {
         provenance: narration.provenance
       } : null,
       music: music ? { mode: music.mode, file: path.relative(projectRoot, music.file), bpm: music.bpm || null, seed: music.seed || null } : null,
+      soundEffects: soundEffects ? { count: soundEffects.cues.length, cues: soundEffects.cues } : null,
+      audio: { masteringMode: timeline.audio && timeline.audio.masteringMode || 'default' },
       loudness: {
         targetLufs: normalized.targetLufs,
         targetTruePeakDb: normalized.targetTruePeakDb,
@@ -1809,6 +1997,7 @@ module.exports = {
   inspectDependencies,
   parseArgs,
   preflightProjectIO,
+  prepareSoundEffects,
   projectPath,
   renderProject,
   verifiedFileNarrationProvenance,

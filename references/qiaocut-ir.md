@@ -30,7 +30,7 @@
   "generation": {
     "narration": {
       "providerPriority": ["listenhub", "project-file", "macos-say"],
-      "preferredVoiceName": "向阳乔木",
+      "preferredVoiceName": "向阳乔木 v1.1",
       "resolutionRule": "Resolve an exact current speaker-name match; never silently substitute."
     },
     "images": {
@@ -64,6 +64,8 @@
 | `audio` | 原声、旁白、音乐、ducking、节奏点 |
 | `verification` | 当前 scene 的检查要求 |
 
+`explainer-social` 的 production spec 额外使用轻量认知契约：`cognitiveTask`（该拍唯一理解目标）、`primaryFocus`（真实组件焦点 ID）和 `visibleChange {kind,from,to}`。它们会进入 scene plan、HTML payload 与首尾双帧 review，不能只作为无人消费的描述字段。
+
 ## Asset 字段
 
 | 字段 | 必需 | 说明 |
@@ -86,5 +88,5 @@ AI 旁白 provenance 额外记录 `speakerId`、`speakerName`、`speakerCatalogS
 - 每个素材和事实都要能回溯。
 - 渲染器可以替换，但 IR 的 scene/asset/audio/text 语义应该稳定。
 - 缺证据时写 `missing evidence`，不要把计划伪装成已执行。
-- 新增中文讲解音频默认使用 `qcut listenhub narration`：优先 ListenHub 的“向阳乔木”显示名，只接受当前 speaker list 的唯一精确匹配，自动入库后才进入带身份与内容 SHA 校验的 `narration.engine=file`。
+- 新增中文讲解音频默认使用 `qcut listenhub narration`：优先 ListenHub 的“向阳乔木 v1.1”显示名，只接受当前 speaker list 的唯一精确匹配，默认 MP3，自动入库后才进入带身份与内容 SHA 校验的 `narration.engine=file`。
 - 生图风格从主题、受众、年代、情绪、平台和媒介推导为具体 visual bible ID/媒介/色板/光线/构图/prompt prefix；实际 prompt/seed/model 通过 ingest/fetch 回写，不能用与内容无关的通用风格词替代导演判断。

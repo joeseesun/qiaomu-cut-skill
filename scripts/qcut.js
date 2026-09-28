@@ -14,8 +14,9 @@ const { verifyVideo } = require('./verify_video');
 const { generateAss, readCaptions } = require('./renderers/ass');
 const { generateHtmlScene, sceneFromIr } = require('./renderers/html_scene');
 const { readAssets, makeLicenseReport } = require('./license_report');
+const { inspectSceneEngines } = require('./render_scene');
 
-const VERSION = '0.4.0';
+const VERSION = '0.13.0';
 
 function displayPath(file) {
   if (!file || typeof file !== 'string') return file;
@@ -57,6 +58,13 @@ const WORKFLOWS = {
     engines: ['manim', 'svg', 'html-renderer', 'ffmpeg-full'],
     outputs: ['animated explainer', 'scene source files', 'formula captions']
   },
+  'explainer-social': {
+    title: '竖屏知识科普 / 概念动画短视频',
+    bestFor: ['AI 知识点', '抽象概念', '抖音/小红书科普', '信息图动画', '强字幕解说'],
+    defaultFormat: '9:16',
+    engines: ['html/svg/manim scene render', 'kinetic ass captions', 'sfx timeline', 'ffmpeg transitions', 'ffmpeg-full'],
+    outputs: ['vertical animated explainer', 'scene source files', 'caption file', 'sfx map', 'cover frame']
+  },
   'cinematic-short': {
     title: '电影感短片 / AI 视觉叙事',
     bestFor: ['氛围片', '概念片', '故事预告', '诗性短片', '城市/自然主题'],
@@ -92,6 +100,13 @@ const WORKFLOWS = {
     engines: ['html charts', 'svg animation', 'motion', 'ffmpeg-full'],
     outputs: ['data video', 'chart scenes', 'source data notes']
   },
+  'motion-design': {
+    title: '代码动态图形 / Motion Design',
+    bestFor: ['UI 形态变换', '产品卡点片', 'Showreel', '线稿/手绘动画', '歌词 MV', '像素动画', 'Three.js 代码电影'],
+    defaultFormat: '16:9, 1:1, or 9:16',
+    engines: ['qcut motion (brief → storyboard gate → probe → render)', 'qcut audio beats/peak', 'html/canvas/p5/three.js scene capture', 'sub-frame motion blur', 'ffmpeg-full'],
+    outputs: ['motion-brief.json', 'beat-grid storyboard', 'pure-time scene source', 'probe contact sheet', 'mp4 with peak-aligned sfx']
+  },
   'hybrid-studio': {
     title: '复杂混合项目',
     bestFor: ['多素材源', '多风格', '长视频', '系列视频', '客户级成片'],
@@ -115,11 +130,13 @@ const VISUAL_DIRECTIONS = {
   'stock-story': 'clear documentary editorial imagery whose subject, setting, age range, and emotional tone come from the brief',
   'person-profile': 'credible archival-documentary portraiture with period-aware materials, lighting, typography, and color',
   explainer: 'clean geometric explanatory visuals with a limited palette, legible hierarchy, and concept-first composition',
+  'explainer-social': 'vertical-first geometric explanatory visuals with a limited palette, strong information hierarchy, caption-safe negative space, and platform-native pacing',
   'cinematic-short': 'cinematic, story-specific imagery with coherent lens language, production design, lighting, and grade',
   'product-launch': 'premium product visualization with precise UI hierarchy, controlled reflections, and brand-consistent color',
   'social-short': 'platform-native editorial imagery with an immediate focal point, bold crop, and caption-safe negative space',
   'talking-head': 'natural editorial B-roll that supports the speaker without competing with faces or captions',
   'data-story': 'information-led editorial imagery that supports charts and labels instead of adding decorative noise',
+  'motion-design': 'high-end minimal motion graphics: one idea per shot, generous negative space, one accent color, one clean sans, springs and one coherent camera language',
   'hybrid-studio': 'a content-derived visual language selected from the subject, audience, era, emotion, platform, and medium'
 };
 
@@ -213,7 +230,7 @@ function inspectFfmpeg() {
     return {
       available: false,
       ok: false,
-      message: 'ffmpeg not found. Run scripts/bootstrap_macos.sh --install on macOS.'
+      message: 'ffmpeg not found. Run: qcut setup --only ffmpeg'
     };
   }
   const version = run(ffmpeg, ['-version']);
@@ -243,7 +260,7 @@ function inspectFfmpeg() {
     capabilities,
     missing,
     recommendation: missing.length
-      ? 'Install ffmpeg-full and prefer /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.'
+      ? 'Run: qcut setup --only ffmpeg (installs ffmpeg-full).'
       : 'Ready for ASS subtitles, overlays, and professional composition.'
   };
 }
@@ -251,15 +268,24 @@ function inspectFfmpeg() {
 function inferWorkflow(brief, explicit) {
   if (explicit && WORKFLOWS[explicit]) return explicit;
   const text = String(brief || '').toLowerCase();
+  const explainerWords = ['科普', '解释', '数学', '算法', '原理', '知识点', '概念', '3blue1brown', 'manim'];
+  const socialWords = ['抖音', '小红书', 'tiktok', 'reels', '竖屏', '短视频'];
+  const oneShotExplainerWords = ['科普视频', '制作一个科普', '做一个科普', '介绍llm中的', '介绍大模型中的', 'explainer video'];
+  if (oneShotExplainerWords.some((word) => text.includes(word))) return 'explainer-social';
+  if (explainerWords.some((word) => text.includes(word)) && socialWords.some((word) => text.includes(word))) {
+    return 'explainer-social';
+  }
+  const motionWords = ['动态图形', '动效视频', 'motion graphic', 'motion design', 'showreel', '卡点', '歌词mv', '歌词 mv', '线稿动画', '手绘动画', '水彩动画', '像素动画', 'pixel art', 'ui 动效', 'ui动效', '形态变换', 'kinetic typography', '代码动画', '代码生成视频', 'p5.js', 'three.js', 'canvas 动画', '用 js 做', '用js做'];
+  if (motionWords.some((word) => text.includes(word)) && !['台词', '英语学习'].some((word) => text.includes(word))) return 'motion-design';
   const tests = [
     ['english-mix', ['英语', '台词', '电影', '剧集', '俚语', '脏话', 'subtitle', 'english']],
     ['person-profile', ['人物', '介绍', '传记', 'profile', 'founder', '创始人']],
-    ['explainer', ['科普', '解释', '数学', '算法', '原理', '3blue1brown', 'manim']],
+    ['explainer', explainerWords],
     ['product-launch', ['产品', '发布', '网站', 'app', 'saas', '插件', 'launch']],
     ['talking-head', ['口播', '访谈', '播客', '字幕', '精剪', '直播']],
     ['data-story', ['数据', '图表', '排行榜', '趋势', '报告']],
     ['cinematic-short', ['电影感', '预告', '氛围', '大片', 'cinematic']],
-    ['social-short', ['抖音', '小红书', 'tiktok', '竖屏', '短视频']],
+    ['social-short', socialWords],
     ['stock-story', ['免费素材', '素材库', '挖掘机', 'pexels', 'pixabay', 'clipseek']]
   ];
   const matched = tests.find(([, words]) => words.some((word) => text.includes(word)));
@@ -284,6 +310,18 @@ function makeScene(index, purpose, visual, technique, text) {
     },
     verification: ['source recorded', 'caption safe-area checked']
   };
+}
+
+function explainerSocialScenes() {
+  return [
+    makeScene(1, 'hook', '用一个反直觉问题或强对比在 3 秒内提出概念', 'smash_cut', '提出观众真正想知道的问题。'),
+    makeScene(2, 'definition', '先定义角色、对象和输入输出，不急着堆术语', 'match_cut', '用一句话建立最小正确模型。'),
+    makeScene(3, 'mechanism', '用 Manim/SVG/HTML 展示关键机制、状态变化或因果链', 'montage', '让抽象机制变成可以看见的变化。'),
+    makeScene(4, 'modern-practice', '连接到今天的 LLM 实践、训练数据或真实应用', 'match_cut', '说明它在现代大模型里如何使用。'),
+    makeScene(5, 'benefits', '用并列比较展示它解决了什么问题', 'beat_cut', '把收益压缩成三个以内的清晰结果。'),
+    makeScene(6, 'limits', '明确误区、代价和不能保证的能力', 'smash_cut', '告诉观众它不是什么。'),
+    makeScene(7, 'outro', '一句话复述本质，并显示向阳乔木、@vista8 和关注 CTA', 'soft_cut', '用可复述的定义完成收束。')
+  ];
 }
 
 function firstMatchingDirection(text, entries, fallback) {
@@ -322,7 +360,7 @@ function deriveVisualBible(brief, workflowId, format) {
     ? ['ink black', 'mist blue-gray', 'aged paper', 'one restrained warm amber accent']
     : workflowId === 'product-launch'
       ? ['brand-led neutral base', 'one functional accent', 'controlled highlight color']
-      : workflowId === 'explainer' || workflowId === 'data-story'
+      : workflowId === 'explainer' || workflowId === 'explainer-social' || workflowId === 'data-story'
         ? ['deep neutral background', 'high-legibility foreground', 'two semantic accent colors']
         : ['subject-derived dominant', 'supporting neutral', 'single emotional accent'];
   const lighting = emotion.includes('melancholic but hopeful')
@@ -347,7 +385,12 @@ function deriveVisualBible(brief, workflowId, format) {
     texture: medium.includes('ink-wash') ? 'fibrous xuan paper, ink bloom, dry-brush edges; no plastic digital sheen' : 'content-appropriate, restrained, and consistent across scenes',
     typography: workflowId === 'person-profile' ? 'period-aware editorial titling with modern subtitle legibility' : 'legible editorial typography matched to the delivery platform',
     continuity: ['subject identity', 'palette', 'lighting direction', 'lens/composition', 'texture', 'typography'],
-    negativePrompt: ['generic stock-photo look', 'style drift', 'unmotivated neon', 'anachronisms', 'watermarks', 'garbled text', 'extra limbs or duplicate subjects'],
+    negativePrompt: [
+      'generic stock-photo look', 'style drift', 'unmotivated neon', 'anachronisms',
+      'watermarks', 'garbled text', 'extra limbs or duplicate subjects',
+      'colored vertical accent stripe on the left edge of a card or callout',
+      'left-border blockquote used as a visual hierarchy shortcut'
+    ],
     rule: 'Every generated image prompt must include this bible ID and preserve all locked fields; only scene action, shot size, and composition may vary.'
   };
   bible.id = `vb-${crypto.createHash('sha256').update(JSON.stringify(bible)).digest('hex').slice(0, 16)}`;
@@ -358,10 +401,10 @@ function deriveVisualBible(brief, workflowId, format) {
 function buildPlan(brief, options = {}) {
   const workflowId = inferWorkflow(brief, options.workflow);
   const workflow = WORKFLOWS[workflowId];
-  const duration = Number(options.duration || (workflowId === 'social-short' ? 45 : 60));
+  const duration = Number(options.duration || (workflowId === 'social-short' ? 45 : workflowId === 'explainer-social' ? 75 : 60));
   const format = options.format || workflow.defaultFormat || '16:9';
   const visualBible = deriveVisualBible(brief, workflowId, format);
-  const scenes = [
+  const scenes = workflowId === 'explainer-social' ? explainerSocialScenes() : [
     makeScene(1, 'hook', '最强视觉或最有情绪的一句话/画面，3 秒内抓住注意力', 'smash_cut', '先让观众停下来。'),
     makeScene(2, 'context', '用信息卡或旁白说明主题、人物、概念或问题', 'slow_push_in', '告诉观众这条视频要解决什么。'),
     makeScene(3, 'development', '主体素材、B-roll、台词、数据或动画展开', 'montage', '把信息变成连续镜头。'),
@@ -385,9 +428,16 @@ function buildPlan(brief, options = {}) {
     },
     style: {
       level: 'professional',
-      pacing: workflowId === 'social-short' ? 'fast hook-heavy' : 'cinematic educational',
+      pacing: workflowId === 'social-short' || workflowId === 'explainer-social'
+        ? 'fast hook-heavy educational'
+        : 'cinematic educational',
       typography: ['kinetic captions', 'safe-area subtitles', 'title cards'],
       color: ['clean contrast', 'subtle film grain only when the subject and era support it'],
+      aestheticGuards: workflowId === 'explainer-social' ? [
+        'Do not use a colored vertical line on the left edge of a card, block, quote, takeaway, or callout.',
+        'Build hierarchy with spacing, scale, alignment, complete outlines, tonal surfaces, and motion—not decorative left stripes.',
+        'Do not duplicate narration as both a large scene card and a burned subtitle in the same region.'
+      ] : [],
       visualBible
     },
     sources: {
@@ -399,7 +449,7 @@ function buildPlan(brief, options = {}) {
     generation: {
       narration: {
         providerPriority: ['listenhub', 'project-file', 'macos-say'],
-        preferredVoiceName: '向阳乔木',
+        preferredVoiceName: '向阳乔木 v1.1',
         language: 'zh',
         resolutionRule: 'Resolve an exact speaker-name match to a current speaker ID; never silently substitute another voice.',
         timelineRule: 'Fetch and ingest generated audio before using narration.engine=file; never place a provider URL in timeline.'
@@ -469,6 +519,12 @@ async function commandDoctor(flags) {
       },
       listenhub: detectListenHub({ capabilities: true })
     },
+    sceneEngines: inspectSceneEngines(),
+    setup: (() => {
+      const { STATUS } = require('./setup_deps');
+      const missing = ['ffmpeg', 'font', 'browser', 'manim'].filter((name) => { try { return !STATUS[name]().ok; } catch (_) { return true; } });
+      return { missing, command: missing.length ? `qcut setup --only ${missing.join(',')}` : null, policy: 'Install missing dependencies with qcut setup and continue; do not skip or downgrade.' };
+    })(),
     optionalTools: {
       python3: displayPath(commandPath('python3')),
       manim: displayPath(commandPath('manim')),
@@ -645,6 +701,30 @@ async function commandFetch(rawArgs) {
   return delegateNodeScript('fetch_generated.js', rawArgs);
 }
 
+async function commandScene(rawArgs) {
+  return delegateNodeScript('render_scene.js', rawArgs);
+}
+
+async function commandExplainer(rawArgs) {
+  return delegateNodeScript('explainer_pipeline.js', rawArgs);
+}
+
+async function commandEnglishMix(rawArgs) {
+  return delegateNodeScript('english_mix.js', rawArgs);
+}
+
+async function commandSetup(rawArgs) {
+  return delegateNodeScript('setup_deps.js', rawArgs);
+}
+
+async function commandMotion(rawArgs) {
+  return delegateNodeScript('motion_studio.js', rawArgs);
+}
+
+async function commandAudio(rawArgs) {
+  return delegateNodeScript('audio_beats.js', rawArgs);
+}
+
 async function commandTechniques(flags) {
   print(TECHNIQUES.map((id) => ({ id })), flags);
 }
@@ -656,10 +736,11 @@ function help() {
 
 Usage:
   qcut doctor [--json]
+  qcut setup [--check] [--only ffmpeg,font,browser,manim,listenhub] [--json]   install missing dependencies
   qcut 33tc <search|pick|cut|tasks|download|me> [...args]
   qcut listenhub doctor|capabilities [--json]
   qcut listenhub narration --text <text>|--text-file <project-relative.txt>
-              --qcut-project <dir> [--voice-name 向阳乔木] --yes [--json]
+              --qcut-project <dir> [--voice-name "向阳乔木 v1.1"] --yes [--json]
   qcut listenhub asr <file> --model sensevoice --json [--qcut-project <dir>]
   qcut listenhub <upstream args...> --qcut-project <dir> [--allow-upload] [--yes]
   qcut clipseek "挖掘机" --type video|photo|illustration [--limit 5] [--json]
@@ -667,6 +748,24 @@ Usage:
   qcut plan "一句话视频需求" [--workflow english-mix] [--duration 60] [--format 9:16] [--json]
   qcut workflow list|show <id> [--json]
   qcut techniques [--json]
+  qcut explainer init <project-dir> --topic "LLM 中的 RL" [--duration 75] [--json]
+  qcut explainer check <project-dir> [--stage init|spec|author|scenes|preview|final] [--json]
+  qcut explainer materialize <project-dir> [--json]
+  qcut explainer timing <project-dir> --audio assets/generated/narration.mp3 [--apply] [--json]
+  qcut explainer render-scenes <project-dir> [--force] [--json]
+  qcut explainer preview|final <project-dir> [--force] [--json]
+  qcut english-mix init <project-dir> --phrases "A|B|C" [--clips-per-phrase 4] [--json]
+  qcut english-mix audit <project-dir> [--require-media] [--strict-boundaries] [--json]
+  qcut english-mix pace <project-dir> [--lead-ms 60] [--tail-ms 500] [--crossfade-ms 200] [--apply] [--force] [--json]
+  qcut english-mix review <project-dir> [--video renders/file.preview.mp4] [--frames 8] [--force] [--json]
+  qcut motion styles|init|check|probe|render <project-dir> [...]   code-drawn motion design studio
+  qcut audio beats <song> [--bpm 120] [--output reports/beat-grid.json] [--json]
+  qcut audio peak <sfx> [--json]
+  qcut scene render <project-dir> <source> --engine html|svg|manim
+             --output assets/scenes/scene.mp4 [--duration 4] [--width 1080] [--height 1920]
+             [--fps 30] [--scene-class SceneName] [--motion-blur 3] [--shutter 0.5]
+             [--scale 0.5] [--force] [--json]
+  qcut scene batch <project-dir> <batch-spec.json> [--force] [--json]
   qcut scaffold ./project --brief "一句话视频需求" [--force] [--json]
   qcut ingest <project-dir> <local-file> --kind image|video|audio --provider listenhub [--json]
   qcut fetch <project-dir> --result <private-capture.json> --field result.videoUrl
@@ -683,6 +782,7 @@ Notes:
   - ClipSeek is a discovery adapter. Verify license on provider source pages.
   - 33tc reads only local app/CLI presence and never prints tokens.
   - 33tc pick/cut may consume account credits. Review the range first; --yes is explicit confirmation.
+  - 33tc media downloads use bounded ffmpeg reconnect/retry. If a task already exists, recover it; never resubmit only to fix a download.
   - ListenHub remote creation requires --yes and --qcut-project; local uploads also require --allow-upload.
   - ListenHub credentials are read only from LISTENHUB_API_KEY or its own local credential store.
   - Remote task output is captured under project-local .qiaocut/jobs; fetch downloads it before timeline use.
@@ -690,7 +790,10 @@ Notes:
   - Render paths in timeline.json must stay inside the project directory.
   - Preview is for fast iteration; only final+full is release-ready.
   - Segment cache is project-local under .qiaocut/cache and can be bypassed with --no-cache.
+  - Explainer scenes use a cross-project SHA-256 cache; set QIAOMU_CUT_SHARED_CACHE=off to disable it.
+  - After production-spec lock, run the one paid TTS request in parallel with local explainer materialization and asset authoring.
   - Existing generated outputs are preserved unless --force is explicit.
+  - Motion scenes must be pure functions of time; motion probe proves it before any full render.
 `);
 }
 
@@ -700,6 +803,12 @@ async function main() {
   if (command === 'listenhub') return commandListenHub(rest);
   if (command === 'ingest') return commandIngest(rest);
   if (command === 'fetch') return commandFetch(rest);
+  if (command === 'scene') return commandScene(rest);
+  if (command === 'explainer') return commandExplainer(rest);
+  if (command === 'english-mix') return commandEnglishMix(rest);
+  if (command === 'motion') return commandMotion(rest);
+  if (command === 'setup') return commandSetup(rest);
+  if (command === 'audio') return commandAudio(rest);
   if (command === 'render') return commandRender(rest);
   const { flags, positional } = parseArgs(rest);
   if (command === 'help' || command === '--help' || command === '-h') return help();

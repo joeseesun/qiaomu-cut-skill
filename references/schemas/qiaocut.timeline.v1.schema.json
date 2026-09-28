@@ -55,7 +55,17 @@
       ]
     },
     "musicOptions": { "type": "object", "additionalProperties": true },
-    "audio": { "type": "object", "additionalProperties": true },
+    "soundEffects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/soundEffect" }
+    },
+    "audio": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "masteringMode": { "enum": ["default", "montage"] }
+      }
+    },
     "look": { "type": "object", "additionalProperties": true },
     "metadata": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] } },
     "reports": { "type": "object", "additionalProperties": true },
@@ -83,9 +93,45 @@
         "duration": { "type": "number", "exclusiveMinimum": 0 },
         "fit": { "enum": ["cover", "contain", "containBlur"] },
         "motion": { "enum": ["none", "pushIn", "pullBack", "panUp", "panDown", "panLeft", "panRight"] },
+        "transition": {
+          "oneOf": [
+            { "$ref": "#/$defs/transitionType" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": { "$ref": "#/$defs/transitionType" },
+                "duration": { "type": "number", "minimum": 0, "maximum": 3 }
+              }
+            }
+          ]
+        },
         "sourceAudio": { "type": "boolean" },
         "sourceGainDb": { "type": "number", "minimum": -60, "maximum": 24 },
         "look": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "transitionType": {
+      "enum": [
+        "cut", "fade", "dissolve", "wipeleft", "wiperight", "wipeup", "wipedown",
+        "slideleft", "slideright", "slideup", "slidedown", "circleopen", "circleclose",
+        "pixelize", "smoothleft", "smoothright", "smoothup", "smoothdown"
+      ]
+    },
+    "soundEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "start"],
+      "properties": {
+        "id": { "type": "string" },
+        "path": { "$ref": "#/$defs/projectPath" },
+        "start": { "type": "number", "minimum": 0 },
+        "trim": { "type": "number", "minimum": 0 },
+        "duration": { "type": "number", "exclusiveMinimum": 0 },
+        "gain": { "type": "number", "minimum": 0, "maximum": 4 },
+        "fadeInMs": { "type": "number", "minimum": 0 },
+        "fadeOutMs": { "type": "number", "minimum": 0 }
       }
     },
     "narration": {

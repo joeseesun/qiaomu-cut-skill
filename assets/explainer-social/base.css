@@ -1,0 +1,389 @@
+/*
+ * QiaoCut explainer-social base theme
+ * Copyright (c) 向阳乔木
+ * X: https://x.com/vista8
+ * GitHub: https://github.com/joeseesun/
+ */
+:root {
+  --bg: #101313;
+  --paper: #f1eadf;
+  --muted: #9b9e99;
+  --teacher: #f2bf4b;
+  --student: #53d3c6;
+  --warning: #ff715f;
+  --surface: rgba(241, 234, 223, 0.055);
+  --line: rgba(241, 234, 223, 0.16);
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  width: var(--canvas-w, 1080px);
+  height: var(--canvas-h, 1920px);
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--paper);
+  font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+}
+
+body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.26;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 120px 120px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent 76%);
+}
+
+.frame {
+  position: relative;
+  width: var(--canvas-w, 1080px);
+  height: var(--canvas-h, 1920px);
+  padding: var(--frame-pad, 92px 84px 180px);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 54px;
+  padding: 0 20px;
+  border: 1px solid rgba(241, 234, 223, 0.26);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 24px;
+  letter-spacing: 0.08em;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--teacher);
+  box-shadow: 0 0 18px var(--teacher);
+}
+
+.display {
+  margin: 0;
+  font-size: 104px;
+  font-weight: 750;
+  line-height: 1.03;
+  letter-spacing: -0.055em;
+}
+
+.title {
+  margin: 0;
+  font-size: 70px;
+  font-weight: 720;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.card {
+  border: 1px solid rgba(241, 234, 223, 0.18);
+  border-radius: 32px;
+  background: var(--surface);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+}
+
+.teacher { color: var(--teacher); }
+.student { color: var(--student); }
+.warning { color: var(--warning); }
+
+.reveal {
+  opacity: 0;
+  transform: translateY(40px) scale(0.985);
+  animation: rise-in 0.66s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--delay, 0s);
+  animation-fill-mode: both;
+}
+
+.footer {
+  position: absolute;
+  left: 84px;
+  right: 84px;
+  bottom: 74px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  color: rgba(241, 234, 223, 0.46);
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+
+.footer-rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(241, 234, 223, 0.18), transparent);
+}
+
+.component-header { display: grid; gap: 54px; }
+.component-title { max-width: 920px; font-size: 82px; }
+.component-stage {
+  margin-top: 130px;
+  display: grid;
+  gap: 34px;
+  align-items: center;
+  transform-origin: center;
+}
+.component-card { padding: 42px 44px; display: grid; gap: 16px; min-height: 168px; }
+.component-label { color: var(--muted); font-size: 24px; letter-spacing: .08em; }
+.component-value { font-size: 48px; line-height: 1.12; }
+.teacher-surface { background: color-mix(in srgb, var(--teacher) 18%, transparent); }
+.student-surface { background: color-mix(in srgb, var(--student) 16%, transparent); }
+.warning-surface { background: color-mix(in srgb, var(--warning) 15%, transparent); }
+.component-teacher-student-transfer,
+.component-comparison { grid-template-columns: 1fr auto 1fr; }
+.component-benefit-risk { grid-template-columns: 1fr 1fr; }
+.transfer-arrow, .comparison-mark { font-size: 58px; color: var(--muted); text-align: center; }
+.reward-loop { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.component-pipeline { display: grid; gap: 18px; }
+.pipeline-arrow { justify-self: center; color: var(--student); font-size: 40px; }
+.component-keyword { font-size: 112px; font-weight: 760; line-height: 1; color: var(--teacher); }
+.component-copy { margin: 0; max-width: 850px; color: rgba(241,234,223,.76); font-size: 36px; line-height: 1.5; }
+.component-chips { display: flex; flex-wrap: wrap; gap: 18px; }
+.component-chip { padding: 14px 22px; border: 1px solid var(--line); border-radius: 999px; font-size: 28px; }
+.outro-brand { font-size: 120px; font-weight: 780; letter-spacing: -.05em; }
+.component-outro .component-copy { color: rgba(241,234,223,.9); font-size: 38px; }
+
+/* —— 机制型解释组件：每类原理拥有不同视觉语法，不再复用“标题 + 卡片列表”。 —— */
+.component-prediction-field,
+.component-segmentation-flow,
+.component-optimization-loop,
+.component-filter-conveyor,
+.component-balance-system,
+.component-state-morph,
+.component-risk-dashboard,
+.component-evidence-photo,
+.component-timeline-story,
+.component-relationship-map { margin-top: 86px; }
+
+/* 预测场：上下文 → 候选概率 → 获胜 token */
+.prediction-lab { position: relative; display: grid; gap: 34px; min-height: 880px; padding: 52px; border: 1px solid var(--line); border-radius: 48px; background: radial-gradient(circle at 82% 12%, rgba(242,191,75,.14), transparent 34%), rgba(4,13,13,.46); overflow: hidden; }
+.prediction-prompt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 18px; font-size: 42px; color: rgba(241,234,223,.78); }
+.prediction-blank { position: relative; display: inline-flex; min-width: 270px; padding: 8px 18px 16px; border-bottom: 3px solid rgba(242,191,75,.48); color: rgba(241,234,223,.22); }
+.prediction-blank.is-filled { border-color: var(--teacher); box-shadow: 0 18px 42px rgba(242,191,75,.12); }
+.prediction-answer { position: absolute; inset: 4px 12px auto; color: var(--teacher); font-size: 54px; font-weight: 780; opacity: 0; }
+.prediction-candidates { display: grid; gap: 22px; }
+.prediction-candidate { display: grid; grid-template-columns: 170px 1fr 92px; align-items: center; gap: 22px; min-height: 86px; padding: 18px 22px; border: 1px solid rgba(241,234,223,.12); border-radius: 24px; background: rgba(241,234,223,.035); }
+.candidate-token { font-size: 34px; font-weight: 680; }
+.candidate-track { height: 16px; border-radius: 999px; background: rgba(241,234,223,.08); overflow: hidden; }
+.candidate-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--student), var(--teacher)); box-shadow: 0 0 24px rgba(83,211,198,.36); }
+.candidate-percent { justify-self: end; color: var(--muted); font-size: 28px; }
+.prediction-winner { justify-self: center; padding: 22px 46px; border-radius: 999px; background: var(--teacher); color: #181512; font-size: 52px; font-weight: 820; box-shadow: 0 24px 80px rgba(242,191,75,.28); opacity: 0; }
+
+/* Token 切分：连续句子被切开、重排并编码成向量格。 */
+.segmentation-lab { position: relative; display: grid; gap: 54px; min-height: 820px; padding: 58px 46px; border-radius: 48px; background: linear-gradient(145deg, rgba(83,211,198,.12), rgba(241,234,223,.025) 52%, rgba(242,191,75,.08)); overflow: hidden; }
+.segmentation-source { position: relative; padding: 34px 30px; border: 1px solid rgba(241,234,223,.18); border-radius: 30px; font-size: 50px; font-weight: 700; text-align: center; letter-spacing: .08em; }
+.segmentation-cutter { position: absolute; left: 5%; top: 174px; width: 4px; height: 124px; border-radius: 999px; background: var(--teacher); box-shadow: 0 0 28px rgba(242,191,75,.75); }
+.segmentation-cutter::before { content: "✂"; position: absolute; left: 50%; top: -48px; transform: translateX(-50%) rotate(-12deg); color: var(--teacher); font-size: 36px; }
+.segmentation-tokens { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; min-height: 170px; align-content: center; }
+.segmentation-token { padding: 20px 26px; border: 1px solid rgba(83,211,198,.42); border-radius: 22px; background: rgba(83,211,198,.10); color: var(--student); font-size: 38px; font-weight: 720; opacity: 0; box-shadow: 0 16px 42px rgba(0,0,0,.18); }
+.embedding-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; padding: 28px; border: 1px solid rgba(241,234,223,.12); border-radius: 30px; background: rgba(0,0,0,.18); }
+.embedding-cell { aspect-ratio: 1; border-radius: 9px; background: linear-gradient(135deg, var(--student), var(--teacher)); opacity: .12; box-shadow: 0 0 16px rgba(83,211,198,.22); }
+
+/* 优化循环：前向预测、损失计算、梯度逆流、参数更新。 */
+.optimization-lab { display: grid; gap: 42px; min-height: 860px; padding: 52px 42px; border: 1px solid var(--line); border-radius: 48px; background: radial-gradient(circle at 50% 42%, rgba(83,211,198,.10), transparent 46%), rgba(0,0,0,.16); }
+.optimization-forward { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.optimization-node { display: grid; place-items: center; min-width: 124px; min-height: 124px; padding: 16px; border: 1px solid rgba(241,234,223,.18); border-radius: 50%; background: rgba(241,234,223,.04); color: var(--muted); font-size: 24px; text-align: center; }
+.optimization-node.is-active { color: var(--student); border-color: rgba(83,211,198,.7); box-shadow: 0 0 0 8px rgba(83,211,198,.07), 0 0 42px rgba(83,211,198,.24); }
+.optimization-link { flex: 1; min-width: 24px; height: 3px; border-radius: 99px; background: linear-gradient(90deg, rgba(83,211,198,.18), var(--student)); }
+.optimization-loss { justify-self: center; display: grid; place-items: center; width: 300px; height: 220px; border: 1px solid rgba(255,113,95,.42); border-radius: 44% 56% 50% 50%; background: radial-gradient(circle, rgba(255,113,95,.20), rgba(255,113,95,.04) 64%, transparent 65%); }
+.loss-label { color: var(--muted); font-size: 26px; }
+.loss-value { color: var(--warning); font-size: 82px; line-height: 1; }
+.optimization-loss.is-hot { box-shadow: 0 0 72px rgba(255,113,95,.34); }
+.optimization-gradient { position: relative; height: 74px; border-top: 2px dashed rgba(242,191,75,.34); border-bottom: 2px dashed rgba(242,191,75,.16); overflow: hidden; }
+.optimization-gradient::after { content: "梯度反向流动"; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: rgba(242,191,75,.72); font-size: 25px; letter-spacing: .08em; }
+.gradient-particle { position: absolute; top: 50%; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; background: var(--teacher); box-shadow: 0 0 22px rgba(242,191,75,.85); opacity: 0; }
+.optimization-weights { justify-self: center; padding: 18px 34px; border: 1px solid rgba(83,211,198,.42); border-radius: 999px; color: var(--student); font-size: 34px; font-weight: 720; opacity: .2; }
+
+/* 数据炼化：文档在传送带上被去重、过滤、配比。 */
+.refinery-lab { position: relative; min-height: 820px; padding: 54px 42px; border-radius: 48px; background: linear-gradient(180deg, rgba(241,234,223,.035), rgba(83,211,198,.09)); overflow: hidden; }
+.refinery-input { position: absolute; left: 42px; top: 44px; color: var(--muted); font-size: 28px; }
+.refinery-belt { position: relative; height: 290px; margin-top: 66px; border-top: 3px solid rgba(241,234,223,.18); border-bottom: 3px solid rgba(241,234,223,.18); background: repeating-linear-gradient(90deg, rgba(241,234,223,.04) 0 44px, transparent 44px 88px); }
+.refinery-document { position: absolute; left: 3%; top: 92px; min-width: 150px; padding: 18px 24px; border: 1px solid rgba(241,234,223,.24); border-radius: 18px; background: #192020; color: var(--paper); font-size: 25px; text-align: center; }
+.refinery-document.is-rejected { color: var(--warning); border-color: rgba(255,113,95,.55); text-decoration: line-through; }
+.refinery-gates { display: grid; grid-template-columns: repeat(3,1fr); gap: 22px; margin-top: 44px; }
+.refinery-gate { display: grid; place-items: center; min-height: 116px; border: 1px solid rgba(241,234,223,.16); border-radius: 50%; color: var(--muted); font-size: 30px; }
+.refinery-gate.is-active { color: var(--teacher); border-color: rgba(242,191,75,.72); box-shadow: inset 0 0 32px rgba(242,191,75,.12), 0 0 36px rgba(242,191,75,.12); }
+.refinery-clean { position: absolute; right: 42px; bottom: 46px; display: flex; align-items: baseline; gap: 18px; padding: 18px 28px; border-radius: 22px; background: rgba(83,211,198,.13); color: var(--student); }
+.clean-label { font-size: 28px; }
+.clean-count { font-size: 58px; line-height: 1; }
+
+/* 三角平衡：参数、数据、算力共同收敛到计算最优区。 */
+.balance-lab { display: grid; gap: 54px; min-height: 820px; padding: 30px 24px 54px; }
+.balance-orbit { position: relative; width: 760px; height: 640px; margin: 0 auto; border: 2px solid rgba(83,211,198,.22); border-radius: 50%; background: radial-gradient(circle, rgba(83,211,198,.12), transparent 58%); transform-origin: center; }
+.balance-orbit::before, .balance-orbit::after { content: ""; position: absolute; inset: 15%; border: 1px dashed rgba(242,191,75,.22); border-radius: 50%; }
+.balance-orbit::after { inset: 31%; border-style: solid; border-color: rgba(241,234,223,.12); }
+.balance-node { position: absolute; display: grid; place-items: center; width: 190px; height: 190px; border: 1px solid rgba(241,234,223,.22); border-radius: 50%; background: #142020; box-shadow: 0 22px 70px rgba(0,0,0,.28); }
+.balance-node-1 { left: 50%; top: 0; margin-left: -95px; }
+.balance-node-2 { left: 20px; bottom: 18px; }
+.balance-node-3 { right: 20px; bottom: 18px; }
+.balance-node.is-balanced { border-color: rgba(83,211,198,.72); box-shadow: 0 0 46px rgba(83,211,198,.20); }
+.balance-label { color: var(--muted); font-size: 26px; }
+.balance-value { color: var(--paper); font-size: 38px; }
+.balance-core { position: absolute; left: 50%; top: 52%; transform: translate(-50%,-50%); width: 250px; height: 250px; display: grid; place-items: center; border-radius: 50%; background: var(--teacher); color: #17140f; font-size: 32px; font-weight: 800; text-align: center; opacity: .2; box-shadow: 0 0 70px rgba(242,191,75,.20); }
+.balance-beam { position: relative; width: 560px; height: 16px; margin: 0 auto; border-radius: 999px; background: linear-gradient(90deg, var(--student), var(--teacher), var(--warning)); }
+.balance-needle { position: absolute; left: 50%; bottom: -12px; width: 8px; height: 94px; border-radius: 99px; background: var(--paper); transform-origin: center bottom; box-shadow: 0 0 28px rgba(241,234,223,.45); }
+
+/* 状态跃迁：噪声态逐步压缩成可读、可迁移的输出态。 */
+.morph-lab { display: grid; grid-template-columns: 1fr 180px 1fr; align-items: center; gap: 24px; min-height: 760px; }
+.morph-panel { display: grid; align-content: center; gap: 28px; min-height: 520px; padding: 42px; border: 1px solid var(--line); border-radius: 42px; background: rgba(241,234,223,.035); }
+.morph-after { border-color: rgba(83,211,198,.38); background: rgba(83,211,198,.08); }
+.morph-label { color: var(--muted); font-size: 26px; }
+.morph-value { font-size: 54px; line-height: 1.25; }
+.morph-before .morph-value { color: rgba(255,113,95,.78); }
+.morph-after .morph-value { color: var(--student); }
+.morph-transition { position: relative; height: 340px; overflow: hidden; }
+.morph-transition::after { content: "→"; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(241,234,223,.24); font-size: 82px; }
+.morph-particle { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--teacher); box-shadow: 0 0 18px rgba(242,191,75,.72); }
+
+/* 风险仪表盘：风险数值抬升并落下“预训练不等于对齐”的结论章。 */
+.risk-lab { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; min-height: 760px; align-content: center; }
+.risk-gauge { display: grid; justify-items: center; gap: 24px; padding: 34px 18px; border: 1px solid rgba(241,234,223,.14); border-radius: 36px; background: rgba(255,113,95,.035); }
+.risk-dial { position: relative; width: 210px; height: 210px; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--warning) 0deg, rgba(241,234,223,.08) 0deg); }
+.risk-dial::after { content: ""; position: absolute; inset: 22px; border-radius: 50%; background: var(--bg); }
+.risk-number { position: relative; z-index: 1; color: var(--paper); font-size: 62px; }
+.risk-label { color: var(--muted); font-size: 29px; text-align: center; }
+.risk-warning { grid-column: 1 / -1; justify-self: center; margin-top: 28px; padding: 20px 42px; border: 3px solid var(--warning); border-radius: 22px; color: var(--warning); font-size: 46px; font-weight: 820; letter-spacing: .04em; opacity: 0; }
+
+/* 真实图像证据：图片是主角，来源与权利状态贴近画面。 */
+.evidence-photo-lab { position: relative; min-height: 820px; margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 40px; background: rgba(0,0,0,.28); }
+.evidence-photo-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center; will-change: transform, clip-path, filter, object-position, opacity; }
+.evidence-photo-shade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(3,8,8,.20) 58%, rgba(3,8,8,.92) 100%); }
+.evidence-photo-caption { position: absolute; left: 42px; right: 42px; bottom: 34px; display: grid; gap: 10px; color: var(--paper); }
+.evidence-photo-caption strong { font-size: 44px; line-height: 1.16; }
+.evidence-photo-caption span { color: rgba(241,234,223,.68); font-size: 22px; }
+
+/* 时间故事：线性时间关系，不用矩形卡片或假仪表盘替代。 */
+.timeline-story-lab { display: grid; gap: 48px; min-height: 700px; align-content: center; }
+.timeline-story-rail { position: relative; display: flex; justify-content: space-between; align-items: flex-start; min-height: 330px; padding-top: 132px; }
+.timeline-story-rail::before { content: ""; position: absolute; left: 0; right: 0; top: 168px; height: 3px; background: rgba(241,234,223,.12); }
+.timeline-story-progress { position: absolute; left: 0; top: 168px; width: 0; height: 3px; background: linear-gradient(90deg, var(--student), var(--teacher)); box-shadow: 0 0 22px rgba(83,211,198,.28); transform-origin: left; }
+.timeline-story-node { position: relative; z-index: 1; display: grid; justify-items: center; gap: 28px; width: 150px; text-align: center; opacity: 0; }
+.timeline-story-node::before { content: ""; width: 20px; height: 20px; margin-top: 26px; border: 4px solid var(--bg); border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 2px rgba(241,234,223,.18); }
+.timeline-story-node.is-active::before { background: var(--student); box-shadow: 0 0 0 3px rgba(83,211,198,.22), 0 0 28px rgba(83,211,198,.38); }
+.timeline-story-year { order: -1; color: var(--paper); font-size: 38px; font-variant-numeric: tabular-nums; }
+.timeline-story-label { color: var(--muted); font-size: 24px; line-height: 1.35; }
+.timeline-story-summary { margin: 0 auto; max-width: 820px; color: rgba(241,234,223,.76); font-size: 34px; line-height: 1.5; text-align: center; opacity: 0; }
+
+/* 关系网：中心主题 + 真实语义节点，不显示伪造百分比。 */
+.relationship-map-lab { position: relative; min-height: 760px; border-radius: 48px; background: radial-gradient(circle at 50% 50%, rgba(83,211,198,.12), transparent 52%); overflow: hidden; }
+.relationship-map-core { position: absolute; left: 50%; top: 50%; z-index: 3; display: grid; place-items: center; width: 250px; height: 250px; padding: 30px; border-radius: 50%; background: var(--teacher); color: #17140f; font-size: 34px; font-weight: 820; line-height: 1.15; text-align: center; }
+.relationship-map-node { position: absolute; left: 50%; top: 50%; z-index: 2; display: grid; place-items: center; min-width: 160px; min-height: 92px; padding: 20px 26px; border: 1px solid rgba(83,211,198,.42); border-radius: 999px; background: #142020; color: var(--paper); font-size: 28px; font-weight: 700; text-align: center; transform: translate(-50%,-50%); opacity: 0; }
+.relationship-map-link { position: absolute; left: 50%; top: 50%; z-index: 1; width: var(--length, 240px); height: 2px; background: linear-gradient(90deg, rgba(242,191,75,.55), rgba(83,211,198,.22)); transform-origin: left center; opacity: 0; }
+.relationship-map-sequence { position: absolute; inset: 0; pointer-events: none; }
+
+/* Landscape composition: keep evidence and explanatory mechanisms fully inside 16:9. */
+@media (min-aspect-ratio: 4/3) {
+  .frame { padding: 54px 96px 70px; }
+  .footer { left: 84px; right: 84px; bottom: 28px; }
+  .component-header { gap: 30px; }
+  .component-title { max-width: 1720px; font-size: 68px; line-height: 1.06; }
+  .component-stage { margin-top: 38px; }
+  .component-prediction-field,
+  .component-segmentation-flow,
+  .component-optimization-loop,
+  .component-filter-conveyor,
+  .component-balance-system,
+  .component-state-morph,
+  .component-risk-dashboard,
+  .component-evidence-photo,
+  .component-timeline-story,
+  .component-relationship-map { margin-top: 34px; }
+
+  .evidence-photo-lab { min-height: 540px; border-radius: 32px; }
+  .evidence-photo-caption { left: 34px; right: 34px; bottom: 26px; }
+  .evidence-photo-caption strong { font-size: 38px; }
+  .evidence-photo-caption span { font-size: 17px; }
+
+  .timeline-story-lab { min-height: 500px; gap: 22px; }
+  .timeline-story-rail { min-height: 280px; padding-top: 92px; }
+  .timeline-story-rail::before,
+  .timeline-story-progress { top: 136px; }
+  .timeline-story-node { width: 210px; gap: 22px; }
+  .timeline-story-year { font-size: 34px; }
+  .timeline-story-label { font-size: 20px; }
+  .timeline-story-summary { max-width: 1100px; font-size: 27px; }
+
+  .relationship-map-lab { min-height: 520px; }
+  .relationship-map-core { width: 190px; height: 190px; font-size: 27px; }
+  .relationship-map-node { min-width: 142px; min-height: 70px; padding: 15px 22px; font-size: 22px; }
+
+  .prediction-lab { min-height: 540px; padding: 34px 50px; gap: 18px; }
+  .segmentation-lab { min-height: 520px; padding: 34px 46px; gap: 24px; }
+  .balance-lab { min-height: 520px; padding: 8px 24px 28px; gap: 24px; }
+  .morph-lab { min-height: 520px; }
+  .morph-panel { min-height: 360px; padding: 34px; }
+  .morph-value { font-size: 46px; }
+  .morph-transition { height: 260px; }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(40px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* —— 动效原语：由 component-runtime.js 按 __QIAOCUT_SET_TIME__ 逐帧驱动，
+      这里只声明静态外观，不写自由跑表的 animation。 —— */
+
+/* 可绘制连接符：本体 scaleX/scaleY 生长，头部 easeOutBack 弹出 */
+.connector { display: inline-flex; align-items: center; justify-content: center; align-self: center; }
+.connector-horizontal { flex-direction: row; min-width: 132px; }
+.connector-vertical { flex-direction: column; min-height: 52px; }
+.connector-pop { min-width: 120px; }
+.connector-body { background: var(--student); border-radius: 4px; transform-origin: left center; }
+.connector-horizontal .connector-body { width: 84px; height: 5px; }
+.connector-vertical .connector-body { width: 5px; height: 30px; transform-origin: center top; }
+.connector-pop .connector-body { display: none; }
+.connector-head { color: var(--student); font-size: 44px; line-height: 1; transform-origin: center; }
+.connector-vertical .connector-head { font-size: 36px; }
+.connector-pop .connector-head { font-size: 58px; color: var(--muted); }
+
+/* state 变形：from/to 双层文本，由 JS 交叉驱动 */
+.state-swap { position: relative; display: inline-block; }
+.state-from, .state-to { display: inline-block; }
+.state-to { position: absolute; left: 0; top: 0; width: 100%; white-space: nowrap; }
+.component-card.state-changed { background: color-mix(in srgb, var(--student) 20%, transparent); }
+.swap-anchor { position: relative; }
+.swap-ring {
+  position: absolute; inset: -12px;
+  border: 3px solid var(--student); border-radius: 36px;
+  pointer-events: none; opacity: 0;
+}
+
+/* process 激活态：描边点亮 + 值变色（class 由 JS 按进度切换） */
+.component-card.step-active { box-shadow: 0 0 0 2px color-mix(in srgb, var(--student) 65%, transparent), 0 24px 80px rgba(0, 0, 0, 0.22); }
+.component-card.step-active .component-value { color: var(--student); }
+.component-chip.step-active { border-color: var(--student); color: var(--student); }
+
+/* 16:9 横屏自适应。竖版默认值按高度堆叠；横屏画面矮而宽，
+   需要更小的纵向留白、并把并列卡片改为左右分栏而非上下堆叠。
+   由 body[data-orientation="landscape"] 触发，pipeline 按 output 宽高注入。 */
+body[data-orientation="landscape"] {
+  --frame-pad: 64px 96px 120px;
+}
+
+body[data-orientation="landscape"] .component-title { max-width: 1280px; font-size: 92px; }
+body[data-orientation="landscape"] .component-keyword { font-size: 104px; }
+body[data-orientation="landscape"] .component-copy { max-width: 1180px; font-size: 40px; }
+
+/* 并列组件本就是两列，横屏只需放宽间距与卡片可用宽度 */
+body[data-orientation="landscape"] .component-comparison,
+body[data-orientation="landscape"] .component-benefit-risk {
+  gap: 40px;
+  align-items: stretch;
+}
+
+/* 顺序组件（pipeline）在横屏保持纵向，但收紧行距避免溢出 */
+body[data-orientation="landscape"] .component-pipeline { gap: 14px; }
+body[data-orientation="landscape"] .pipeline-arrow { font-size: 34px; }
+body[data-orientation="landscape"] .connector-vertical { min-height: 40px; }
+body[data-orientation="landscape"] .connector-vertical .connector-body { height: 22px; }

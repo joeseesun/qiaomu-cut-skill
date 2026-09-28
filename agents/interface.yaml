@@ -1,5 +1,5 @@
 name: qiaomu-cut
-version: 0.4.0
+version: 0.13.0
 mode: governed
 summary: 一句话生成专业视频的乔木智能剪辑导演
 owner:
@@ -15,6 +15,9 @@ intents:
       - 搜几段电影里骂人的台词，混剪成英语学习视频
       - 介绍乔布斯，做一个电影感人物短片
       - 把这段口播剪成小红书风格短视频
+      - 制作一个科普视频：介绍 LLM 中的 RL
+      - 做一个 15 秒的动态图形 showreel
+      - 用代码做一个卡 120 BPM 的 UI 形态变换循环动效
   - id: source_media
     description: 搜索、生成或整理视频、照片、插画、影视台词、旁白、音乐、本地文件和 AI 素材
   - id: plan_video
@@ -35,11 +38,13 @@ inputs:
       - stock-story
       - person-profile
       - explainer
+      - explainer-social
       - cinematic-short
       - product-launch
       - social-short
       - talking-head
       - data-story
+      - motion-design
       - hybrid-studio
   assets:
     type: array
@@ -66,11 +71,19 @@ outputs:
 creative_defaults:
   narration:
     provider_priority: ListenHub
-    preferred_speaker_name: 向阳乔木
-    speaker_resolution: 默认由 qcut listenhub narration 执行，只接受唯一、已授权的“向阳乔木”完全同名 speaker ID，并自动记录 speaker/text/catalog provenance
+    preferred_speaker_name: 向阳乔木 v1.1
+    speaker_resolution: 默认由 qcut listenhub narration 执行，--voice-name 默认即“向阳乔木 v1.1”，调用时无需指定；只接受唯一、已授权的“向阳乔木 v1.1”完全同名 speaker ID，并自动记录 speaker/text/catalog provenance
+    format: mp3
     failure_policy: 找不到、歧义或未授权时不悄悄换音色；回退用户已提供的 file narration 或请求选择
     billing_policy: 有 estimate 先 estimate；当前 OpenAPI TTS 无已验证 estimate，必须说明费用未知并为本次调用取得 --yes
     localization: 二进制输出必须项目相对、no-clobber，生成后立即 ingest；URL 结果立即 fetch
+  scene_motion:
+    focus_spotlight: primaryFocus 渲染为真实聚光：非焦点元素压暗降饱和，焦点光晕+微脉冲；focus-sequence 不画矩形光晕圈，强调由步骤激活态承担
+    visible_change_semantics: state=焦点 from→to 文本变形+高亮环；process=序列节点全程逐步激活+连接符生长+落位 settle 微振；两者都随场景时长铺排，无死时间
+    beats: "qcut explainer beats --apply 按旁白静音分句点自动生成；spec 场景可选 [{at: 秒, action: activate|swap|pulse, target?: 步骤序号}] 手填覆盖"
+    review: scene-review 首/中/尾三帧；state|process 场景自动首尾帧差检测，YAVG<2.0 判 visibleChangeVerified=false
+    narration_gate: spec 旁白锁 timing 但 timeline.narration.engine=none 时 preview/final 报错；final 抽听成片中段 RMS<-40dB 报错
+    music_default: explainer 知识片默认 music:false，程序化合成垫不作默认交付
   generated_images:
     style_inputs:
       - content_theme
@@ -82,6 +95,27 @@ creative_defaults:
     mismatch_policy: 不硬编码单一风格；提示词与主题或 visual bible 不匹配时拒绝生成并先重写/重规划
 
 commands:
+  setup:
+    run: node scripts/qcut.js setup --json
+    description: 幂等安装缺失依赖（ffmpeg-full、中文字幕字体、playwright+Chromium、Manim、ListenHub CLI）；doctor 报缺时 agent 直接运行后继续，不跳过、不降级
+  motion_init:
+    run: node scripts/qcut.js motion init ./promo --style product-promo --audio assets/song.mp3 --json
+    description: 生成六段式 motion-brief.json、节拍网格分镜骨架、pure-time 起步场景和 motion kit
+  motion_check:
+    run: node scripts/qcut.js motion check ./promo --json
+    description: 先分镜后代码硬门：镜头写完、切点落在节拍网格、Banned≥3、镜头连续、确定性 lint
+  motion_probe:
+    run: node scripts/qcut.js motion probe ./promo --json
+    description: 切点/中点/events 截图、正序倒序冷启动三次截图字节一致、循环接缝 PSNR、contact sheet
+  motion_render:
+    run: node scripts/qcut.js motion render ./promo --profile final --json
+    description: draft 半分辨率无模糊；final 需 probe 通过，3 子帧动态模糊、峰值对齐音效、−14 LUFS 迭代母带
+  audio_beats:
+    run: node scripts/qcut.js audio beats assets/song.mp3 --output reports/beat-grid.json --json
+    description: 无依赖节拍网格：BPM、样本级校准的拍点、强拍、小节能量与 drop
+  audio_peak:
+    run: node scripts/qcut.js audio peak assets/sfx/click.wav --json
+    description: 测音效峰值偏移，用于把峰值而不是文件起点对齐到画面事件
   doctor:
     run: node scripts/qcut.js doctor --json
     description: 检查 ffmpeg-full、33tc、ClipSeek、本地工具能力
@@ -105,7 +139,19 @@ commands:
     description: 正式终稿；timeline 原始输出、两遍响度、full 校验和 contact sheet；省略 profile 仍默认 final
   33tc:
     run: node scripts/qcut.js 33tc search "台词" --json
-    description: 委托独立安装且获授权的 33tc CLI；pick/cut 可能耗积分，必须显式确认
+    description: 委托独立安装且获授权的 33tc CLI；pick/cut 可能耗积分，必须显式确认；远程下载启用有界重连，已有 task ID 时用 download 恢复而不重新付费创建
+  english_mix_init:
+    run: node scripts/qcut.js english-mix init ./daily-english --phrases "That makes sense|I see what you mean" --clips-per-phrase 4 --json
+    description: 初始化影视英语混剪目录和目标数量明确的 source-selection.json
+  english_mix_audit:
+    run: node scripts/qcut.js english-mix audit ./daily-english --require-media --strict-boundaries --json
+    description: 在付费切片前校验多 cue 完整句上下文，下载后再检查音视频流、SHA-256 重复和字幕证据
+  english_mix_pace:
+    run: node scripts/qcut.js english-mix pace ./daily-english --crossfade-ms 200 --apply --json
+    description: 不覆盖原素材，先按字幕边界裁掉残句，再生成带 60ms 安静入场、500ms 静音尾帧和 40/160ms 音频淡入淡出的派生素材，验证边界低于 -60 dB，并约定 timeline 使用 200ms fade/audio acrossfade
+  english_mix_review:
+    run: node scripts/qcut.js english-mix review ./daily-english --frames 8 --json
+    description: 从预览自动生成最多 8 帧素材总览和最长英文字幕手机帧
   scaffold:
     run: node scripts/qcut.js scaffold ./qiaocut-project --brief "做一个 60 秒挖掘机英语启蒙视频" --json
     description: 创建视频项目目录、IR、素材 manifest 和授权报告
@@ -115,6 +161,24 @@ commands:
   html_scene:
     run: node scripts/qcut.js html-scene qiaocut-ir.json --scene s01 --output scenes/s01.html
     description: 把 IR scene 转成可捕获的 HTML 视觉场景
+  scene_render:
+    run: node scripts/qcut.js scene render ./project scenes/concept.html --engine html --output assets/scenes/concept.mp4 --duration 4 --width 1080 --height 1920 --fps 30
+    description: 把 HTML/SVG/Manim 场景渲染成可进入 timeline 的项目内 MP4；浏览器帧通过 image2pipe 直接进入 ffmpeg，不创建 PNG 帧目录
+  scene_batch:
+    run: node scripts/qcut.js scene batch ./project scenes-batch.json --json
+    description: 同构 HTML/SVG 卡片共用一次 Chrome 会话批量渲染，减少重复启动与漏产物
+  explainer_autopilot:
+    run: node scripts/qcut.js explainer init ./LLM-RL --topic "LLM 中的 RL" --json
+    description: 一句话科普入口；创建七段结构、无左色条视觉模板、author/review/final 门和增量场景计划
+  explainer_preview:
+    run: node scripts/qcut.js explainer preview ./LLM-RL --json
+    description: 按依赖顺序只渲染过期场景，执行 author/scenes gate，生成快速预览及每场景首尾双帧认知审查表
+  explainer_timing:
+    run: node scripts/qcut.js explainer timing ./LLM-RL --audio assets/generated/narration.mp3 --apply --json
+    description: 测量真实旁白时长并生成 narration-timing.json；优先用静音边界形成 phrase timing，证据不足时显式降级为 duration-level，不冒充逐词对齐
+  explainer_final:
+    run: node scripts/qcut.js explainer final ./LLM-RL --json
+    description: 只有 autopilot-review 全部通过后执行 final/full 并要求 releaseReady
   license:
     run: node scripts/qcut.js license assets-manifest.json --output license-report.md
     description: 生成素材授权报告
@@ -132,7 +196,7 @@ commands:
     description: 用创建结果中的 task ID 只读轮询，并把结果自动捕获到项目私有 .qiaocut/jobs/listenhub/ 下
   listenhub_narration:
     run: node scripts/qcut.js listenhub narration --text-file scripts/narration.txt --qcut-project /path/to/project --yes --json
-    description: 默认中文讲解闭环：唯一精确匹配“向阳乔木”，执行 TTS、签名校验、自动 ingest，并返回带 speaker/text/catalog/capture provenance 的 timelineNarration；费用未知时先确认本次 --yes
+    description: 默认中文讲解闭环：不传 --voice-name 即默认唯一精确匹配“向阳乔木 v1.1”，默认 MP3，执行签名校验、自动 ingest，并返回带 provenance 的 timelineNarration；费用未知时先确认本次 --yes，失败后不自动二次付费
   listenhub_asr:
     run: node scripts/qcut.js listenhub asr assets/interview.wav --model sensevoice --json --qcut-project /path/to/project
     description: 使用 Coli 做本地全文 ASR；不把它描述为逐词字幕对齐
@@ -167,7 +231,8 @@ trust_boundary:
     - accepting API keys as command arguments or writing them to jobs, manifests, logs, reports, or Git
     - putting temporary signed provider URLs in public manifests or timelines
     - writing ListenHub captures outside the project-private .qiaocut/jobs/listenhub/ directory
-    - silently substituting another voice when the exact 向阳乔木 speaker is absent, ambiguous, or unauthorized
+    - silently substituting another voice when the exact 向阳乔木 v1.1 speaker is absent, ambiguous, or unauthorized
+    - using a colored vertical stripe on the left edge of a card, quote, callout, takeaway, or block as a hierarchy shortcut
     - hard-coding one generated-image style regardless of the brief or generating prompts that conflict with the project visual bible
     - executing nested vendored MarsWave skills, auto-upgrades, agent-memory persistence, or cola-avatar-pack deletion instructions
 

@@ -1,0 +1,8 @@
+interface:
+  display_name: "乔木 Cut"
+  short_description: "一句话生成可复现、可验收的专业视频工程"
+  brand_color: "#F2BF4B"
+  default_prompt: "Use $qiaomu-cut to make a vertical explainer video about an LLM concept from research through final verification."
+
+policy:
+  allow_implicit_invocation: true

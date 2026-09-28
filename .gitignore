@@ -3,8 +3,10 @@
 .env.*
 !.env.example
 node_modules/
+.deps/
 .qiaocut/
 .listenhub/
+.qiaocut-local-preferences.json
 downloads/
 renders/
 *.log

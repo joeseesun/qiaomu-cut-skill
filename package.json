@@ -1,6 +1,6 @@
 {
   "name": "qiaomu-cut-skill",
-  "version": "0.5.0",
+  "version": "0.13.0",
   "private": true,
   "description": "Qiaomu agent-native video director with governed ListenHub generation, local ASR, and reproducible rendering",
   "type": "commonjs",
@@ -18,15 +18,26 @@
     "listenhub:doctor": "node scripts/qcut.js listenhub doctor --json",
     "listenhub:smoke": "node scripts/listenhub_smoke.js",
     "narration:smoke": "node scripts/file_narration_smoke.js",
+    "motion:smoke": "node scripts/motion_studio_smoke.js",
+    "beats:smoke": "node scripts/explainer_beats_smoke.js",
     "vendor:verify": "node scripts/verify_marswave_vendor.js",
     "security-smoke": "node scripts/security_smoke.js",
     "typography:smoke": "node scripts/bilingual_typography_smoke.js",
     "brand:smoke": "node scripts/brand_templates_smoke.js",
     "sentence:smoke": "node scripts/sentence_boundary_smoke.js",
-    "release-check": "node scripts/verify_marswave_vendor.js && node scripts/bilingual_typography_smoke.js && node scripts/brand_templates_smoke.js && node scripts/sentence_boundary_smoke.js && node scripts/release_check.js",
+    "33tc:smoke": "node scripts/ffmpeg_retry_shim_smoke.js",
+    "english-mix:smoke": "node scripts/english_mix_smoke.js",
+    "kinetic:smoke": "node scripts/kinetic_caption_smoke.js",
+    "timeline:smoke": "node scripts/timeline_features_smoke.js",
+    "scene:smoke": "node scripts/scene_renderer_smoke.js",
+    "explainer:smoke": "node scripts/explainer_pipeline_smoke.js",
+    "explainer:cognitive-timing": "node scripts/explainer_cognitive_timing_smoke.js",
+    "explainer:e2e": "node scripts/explainer_e2e_smoke.js",
+    "release-check": "node scripts/verify_marswave_vendor.js && node scripts/bilingual_typography_smoke.js && node scripts/brand_templates_smoke.js && node scripts/sentence_boundary_smoke.js && node scripts/ffmpeg_retry_shim_smoke.js && node scripts/english_mix_smoke.js && node scripts/kinetic_caption_smoke.js && node scripts/timeline_features_smoke.js && node scripts/explainer_pipeline_smoke.js && node scripts/explainer_cognitive_timing_smoke.js && node scripts/scene_renderer_smoke.js && node scripts/explainer_e2e_smoke.js && node scripts/motion_studio_smoke.js && node scripts/release_check.js",
     "workflow": "node scripts/qcut.js workflow list",
     "validate": "python3 scripts/validate_skill.py .",
-    "trigger-eval": "python3 scripts/trigger_eval.py . --cases evals/trigger_cases.json --output reports/trigger-eval.json"
+    "trigger-eval": "python3 scripts/trigger_eval.py . --cases evals/trigger_cases.json --output reports/trigger-eval.json",
+    "setup": "node scripts/qcut.js setup"
   },
   "engines": {
     "node": ">=18"

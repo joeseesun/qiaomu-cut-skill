@@ -14,12 +14,19 @@ def main() -> int:
         "SKILL.md",
         "README.md",
         "agents/interface.yaml",
+        "agents/openai.yaml",
         "evals/trigger_cases.json",
         "reports/skill-ir.json",
         "references/workflows.md",
         "references/source-adapters.md",
         "references/trust-boundary.md",
+        "references/explainer-autopilot.md",
+        "references/aesthetic-preferences.md",
         "scripts/qcut.js",
+        "scripts/explainer_pipeline.js",
+        "scripts/explainer_pipeline_smoke.js",
+        "scripts/explainer_e2e_smoke.js",
+        "assets/explainer-social/base.css",
     ]
     for rel in required:
         if not (root / rel).exists():
@@ -39,6 +46,9 @@ def main() -> int:
                 errors.append("SKILL.md description should use block scalar: description: |")
         if "missing evidence" not in text.lower():
             warnings.append("SKILL.md should mention missing evidence boundary")
+        for required_phrase in ["一句话科普快速通道", "向阳乔木 v1.1", "左侧彩色竖线", "image2pipe"]:
+            if required_phrase not in text:
+                errors.append(f"SKILL.md missing v0.6 contract: {required_phrase}")
 
     readme = root / "README.md"
     if readme.exists():

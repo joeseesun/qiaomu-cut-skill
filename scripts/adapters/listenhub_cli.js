@@ -25,7 +25,7 @@ function main(argv = process.argv.slice(2)) {
   qcut listenhub doctor [--json]
   qcut listenhub capabilities [--json]
   qcut listenhub narration --text <text>|--text-file <project-relative.txt>
-              --qcut-project <dir> [--voice-name 向阳乔木] --yes [--json]
+              --qcut-project <dir> [--voice-name "向阳乔木 v1.1"] --yes [--json]
   qcut listenhub asr <file> --model sensevoice --json [--qcut-project <dir>]
   qcut listenhub <upstream args...> [--qcut-project <dir>] [--qcut-capture <relative.json>]
                   [--allow-upload] [--yes]
