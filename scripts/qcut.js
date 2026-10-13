@@ -16,7 +16,7 @@ const { generateHtmlScene, sceneFromIr } = require('./renderers/html_scene');
 const { readAssets, makeLicenseReport } = require('./license_report');
 const { inspectSceneEngines } = require('./render_scene');
 
-const VERSION = '0.13.0';
+const VERSION = '0.15.0';
 
 function displayPath(file) {
   if (!file || typeof file !== 'string') return file;
@@ -725,6 +725,10 @@ async function commandAudio(rawArgs) {
   return delegateNodeScript('audio_beats.js', rawArgs);
 }
 
+async function commandCover(rawArgs) {
+  return delegateNodeScript('cover.js', rawArgs);
+}
+
 async function commandTechniques(flags) {
   print(TECHNIQUES.map((id) => ({ id })), flags);
 }
@@ -758,7 +762,10 @@ Usage:
   qcut english-mix audit <project-dir> [--require-media] [--strict-boundaries] [--json]
   qcut english-mix pace <project-dir> [--lead-ms 60] [--tail-ms 500] [--crossfade-ms 200] [--apply] [--force] [--json]
   qcut english-mix review <project-dir> [--video renders/file.preview.mp4] [--frames 8] [--force] [--json]
-  qcut motion styles|init|check|probe|render <project-dir> [...]   code-drawn motion design studio
+  qcut motion styles|init|check|probe|cover|render <project-dir> [...]   code-drawn motion design studio
+  qcut motion diversity <project-dir> <project-dir> [...]   a batch of films must be different concepts (archetype, music, structure)
+  qcut cover check <video|image> [--out dir] [--json]   frame-0 cover gate: not black, contrast, size, hold, feed previews
+  qcut cover export <video> [--at 0] [--out renders/cover]   thumbnails (1280×720 JPG + 360/168 previews) from a frame
   qcut audio beats <song> [--bpm 120] [--output reports/beat-grid.json] [--json]
   qcut audio peak <sfx> [--json]
   qcut scene render <project-dir> <source> --engine html|svg|manim
@@ -809,6 +816,7 @@ async function main() {
   if (command === 'motion') return commandMotion(rest);
   if (command === 'setup') return commandSetup(rest);
   if (command === 'audio') return commandAudio(rest);
+  if (command === 'cover') return commandCover(rest);
   if (command === 'render') return commandRender(rest);
   const { flags, positional } = parseArgs(rest);
   if (command === 'help' || command === '--help' || command === '-h') return help();

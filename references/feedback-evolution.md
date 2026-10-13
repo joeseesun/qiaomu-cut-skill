@@ -387,6 +387,32 @@
   status: active
 ```
 
+```yaml
+- id: frame-zero-cover-and-thumbnail
+  date: 2026-09-28
+  userWords: 对于视频来说需要封面，不能让开头是黑色的，你搜索调研 Youtube 上最火，点击最高的封面，还有总结出封面设计方法论。给视频加上封面，融到视频开头。这个方法也需要写入 qiaomu cut skill 中
+  scope: global
+  abstraction: 每支非循环成片都以封面开场，封面就是第 0 帧和缩略图；先定承诺再画，一个焦点、≤ 6 字、明度对比、避开时长徽标、168 px 可读；定帧 ≤ 0.7 s 后在拍点退场，正片前 5 秒兑现封面。
+  implementation: references/cover-thumbnail-method.md；scripts/cover.js（qcut cover check|export）；motion init 以两拍 s00 封面开场并生成 brief.cover；motion check 的 cover-missing/cover-unwritten 硬门；motion probe 第 0 帧平均亮度 ≥ 28 硬门并阻断 final；qcut motion cover 多变体缩略图；scripts/cover_smoke.js。
+  before: motion 片从黑底逐词钩子开场，第 0 帧全黑，没有缩略图交付。
+  after: 乔木 Home 宣传片第 0 帧是「告别空白页」前后对比封面（定帧 0.7 s，1.0 s 强拍接钩子），另交付 3 个缩略图变体（1280×720 JPG + 2x 母版 + 360/168 预览）。
+  evidence: qiaomu-home-promo/reports/motion-cover.json、reports/motion-probe.json（cover.notBlack）、scripts/cover_smoke.js、scripts/motion_studio_smoke.js
+  status: active
+```
+
+```yaml
+- id: one-film-one-concept
+  date: 2026-09-29
+  userWords: 为啥风格都一样啊，能不能发挥想象力，参考苹果等大厂的宣传片重新写不同的脚本画面运镜重新生成，每个风格和配乐都不一样，让人看来就想马上安装使用
+  scope: global
+  abstraction: 同一批多支宣传片必须是独立创意——不同的原型、参考广告、机关、镜头语言、配乐和字体；共用骨架只换皮肤是失败。先选创意再写代码，先卖情绪/结果再讲功能。
+  implementation: references/ad-concept-library.md（原型库+差异矩阵）；brief.concept 字段与 concept-unwritten 硬门；qcut motion diversity（same-archetype/same-music/same-structure/same-reference 阻断，close-tempo/similar-palette/same-type/same-duration 警告）；scripts/concept_smoke.js。
+  before: 电台/RSS/Reader/Agent 四支共用同一份 promo-kit 骨架（封面→黑底钩子→圆形展开→四个功能段→信任句→片尾），只换配色、截图和文案，配乐同一套生成器。
+  after: 四支各自独立：Reader 文学宣言（钢琴华尔兹）、RSS 动态字体（808 强节奏）、电台剪影舞蹈（放克 house）、Agent 空间飞行（无鼓氛围）；diversity 检查通过。
+  evidence: qiaomu-plugin-promos/v2/*/motion-brief.json 的 concept；v2/reports-diversity.json；scripts/concept_smoke.js
+  status: active
+```
+
 ## 提升门槛
 
 - 用户明确要求“以后都这样”或“改进 Skill”：可直接提升到对应 workflow/global。

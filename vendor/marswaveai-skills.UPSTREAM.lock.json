@@ -26,14 +26,42 @@
     "contentDigest": "cf59c440381af19f220c3fc57e88702199cf77984cf94d692716a1eafd3eefeb"
   },
   "quarantinedDistributionLayout": {
-    "reason": "Local Codex discovery recursively exposed content-parser as an independent skill despite the reference-only vendor boundary. content-parser/SKILL.md is intentionally removed; its non-executable reference files remain for provenance.",
+    "reason": "Local agent discovery recursively exposed vendored skills as independent skills despite the reference-only vendor boundary. content-parser/SKILL.md is removed and every other nested SKILL.md is renamed to SKILL.example.md so no installer can activate upstream instructions; content is unchanged and kept for provenance.",
     "excludedEntrypoints": [
-      "content-parser/SKILL.md"
+      "content-parser/SKILL.md",
+      "asr/SKILL.md",
+      "cola-avatar-pack/SKILL.md",
+      "creator/SKILL.md",
+      "explainer/SKILL.md",
+      "image-gen/SKILL.md",
+      "listenhub-cli/SKILL.md",
+      "listenhub-voice/SKILL.md",
+      "listenhub/SKILL.md",
+      "music/SKILL.md",
+      "podcast/SKILL.md",
+      "slides/SKILL.md",
+      "tts/SKILL.md",
+      "video-gen/SKILL.md"
     ],
     "entries": 112,
     "files": 112,
     "symlinks": 0,
     "bytes": 1826018,
-    "contentDigest": "cf72f87f63c9ee558b5747a92793dead153793d735d13d6f9b97416aa21bf18d"
+    "contentDigest": "0fe444336e187a1433691045bb265055eb3e6bc46291d5ebe4350476c6c9a62b",
+    "renamedEntrypoints": [
+      "asr/SKILL.example.md",
+      "cola-avatar-pack/SKILL.example.md",
+      "creator/SKILL.example.md",
+      "explainer/SKILL.example.md",
+      "image-gen/SKILL.example.md",
+      "listenhub-cli/SKILL.example.md",
+      "listenhub-voice/SKILL.example.md",
+      "listenhub/SKILL.example.md",
+      "music/SKILL.example.md",
+      "podcast/SKILL.example.md",
+      "slides/SKILL.example.md",
+      "tts/SKILL.example.md",
+      "video-gen/SKILL.example.md"
+    ]
   }
 }

@@ -127,6 +127,11 @@ try {
   const briefFile = path.join(project, 'motion-brief.json');
   const brief = JSON.parse(fs.readFileSync(briefFile, 'utf8'));
   brief.storyboard.forEach((shot, index) => Object.assign(shot, { idea: `idea ${index}`, camera: 'locked', transitionIn: 'hard cut on beat', onScreenText: ['Ship', 'Faster', 'Now'][index % 3] }));
+  assert.equal(brief.storyboard[0].id, 's00', 'non-loop scaffold opens on the cover shot');
+  assert.ok(check.json.errors.some((item) => item.code === 'cover-unwritten'), 'unwritten cover blocks');
+  Object.assign(brief.cover, { promise: 'ship faster', archetype: 'product-hero' });
+  assert.ok(check.json.errors.some((item) => item.code === 'concept-unwritten'), 'unwritten concept blocks');
+  Object.assign(brief.concept, { archetype: 'kinetic-typography', reference: 'Nike kinetic type ad', device: 'one word per beat', musicStyle: 'trap-808', typeStyle: 'heavy-grotesque', structure: 'slams then reveal', palette: ['#ff5a1f', '#0a0a0a'] });
   brief.direction.references = [{ kind: 'none', why: 'smoke' }];
   brief.approval.mode = 'autopilot';
   brief.audio.music.license = 'synthetic';
@@ -166,7 +171,12 @@ try {
     probe = qcut(['motion', 'probe', project]);
     assert.equal(probe.json.ok, true, JSON.stringify(probe.json.determinism));
     assert.ok(fs.existsSync(path.join(project, probe.json.contactSheet)));
-    checks.push('probe: stateful scene rejected, pure scene passes');
+    assert.equal(probe.json.cover.notBlack, true, JSON.stringify(probe.json.cover));
+    checks.push('probe: stateful scene rejected, pure scene passes, frame 0 is a readable cover');
+    const cover = qcut(['motion', 'cover', project, '--scale', '1']);
+    assert.equal(cover.json.ok, true, JSON.stringify(cover.json));
+    assert.ok(fs.existsSync(path.join(project, cover.json.variants[0].jpg)));
+    checks.push(`motion cover: ${cover.json.variants.length} variants → JPG + feed previews`);
 
     // 7. Tiny final render with sub-frame motion blur, music and a peak-aligned SFX.
     const render = qcut(['motion', 'render', project, '--profile', 'final']);

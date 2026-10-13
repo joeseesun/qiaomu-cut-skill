@@ -10,6 +10,9 @@
  *          banned list, dead time, one idea per shot, determinism lint
  *   probe  stills at every cut + midpoints, reverse/cold seek determinism proof,
  *          loop seam check and a contact sheet — before any full render
+ *   diversity  a batch of films must be genuinely different concepts (archetype, music, structure…)
+ *   cover  frame 0 is the cover: render ?cover=<variant> at t=0 as a 2x master,
+ *          1280-wide JPG thumbnails and 360/168 feed previews, then gate them
  *   render draft (half resolution, no blur) or final (sub-frame motion blur),
  *          music + peak-aligned SFX, loudness normalization, verification
  */
@@ -21,6 +24,7 @@ const { spawnSync } = require('child_process');
 const { captureBrowserScene, captureStills, projectPath } = require('./render_scene');
 const { analyzeBeats, peakOffset } = require('./audio_beats');
 const { verifyVideo } = require('./verify_video');
+const { lumaStats, checkCover, exportThumbnails, LIMITS: COVER_LIMITS } = require('./cover');
 
 class UsageError extends Error {}
 
@@ -160,24 +164,44 @@ function loadGrid(root, brief) {
   return null;
 }
 
-function storyboardSkeleton(style, canvas, bpm) {
+// Non-loop films open on the cover (s00, two beats or 1 s): frame 0 = thumbnail.
+function coverSeconds(bpm) {
+  return bpm ? round((2 * 60) / bpm) : 1;
+}
+
+function storyboardSkeleton(style, canvas, bpm, options = {}) {
+  const cover = options.cover ? coverSeconds(options.coverBpm || bpm) : 0;
+  const body = canvas.duration - cover;
   const beats = style.structure.length;
   const barSeconds = bpm ? (4 * 60) / bpm : null;
   const shots = [];
+  if (cover) {
+    shots.push({
+      id: 's00',
+      cover: true,
+      start: 0,
+      end: cover,
+      idea: 'TODO: cover = frame 0 = thumbnail (references/cover-thumbnail-method.md): one archetype, one focal point, ≤ 6 CJK / 4 words, hold ≤ 0.7 s then exit on the beat',
+      onScreenText: options.title || '',
+      camera: 'locked-off cover; exit in the last 0.3 s',
+      transitionIn: 'frame 0',
+      events: [{ at: 0, what: 'cover fully readable' }]
+    });
+  }
   let cursor = 0;
   for (let index = 0; index < beats; index += 1) {
-    let end = index === beats - 1 ? canvas.duration : (canvas.duration * (index + 1)) / beats;
-    if (barSeconds) end = index === beats - 1 ? canvas.duration : Math.max(cursor + barSeconds, Math.round(end / barSeconds) * barSeconds);
-    end = Math.min(canvas.duration, round(end));
+    let end = index === beats - 1 ? body : (body * (index + 1)) / beats;
+    if (barSeconds) end = index === beats - 1 ? body : Math.max(cursor + barSeconds, Math.round(end / barSeconds) * barSeconds);
+    end = Math.min(body, round(end));
     if (end <= cursor) continue;
     shots.push({
       id: `s${String(index + 1).padStart(2, '0')}`,
-      start: round(cursor),
-      end,
+      start: round(cursor + cover),
+      end: round(end + cover),
       idea: `TODO: ${style.structure[index]}`,
       onScreenText: '',
       camera: 'TODO',
-      transitionIn: index === 0 ? 'cold open' : 'TODO',
+      transitionIn: index === 0 ? (cover ? 'cut from the cover on the downbeat' : 'cold open') : 'TODO',
       events: []
     });
     cursor = end;
@@ -304,6 +328,27 @@ function commandInit(root, flags) {
       sfx: [],
       loudnessLUFS: -14
     },
+    cover: Boolean(flags.loop || style.loop) ? null : {
+      frame: 0,
+      holdSeconds: 0.7,
+      exitSeconds: 0.3,
+      promise: 'TODO: what the viewer gets, in one sentence (the title explains, the cover shows)',
+      archetype: 'TODO: before-after | product-hero | big-number | face-emotion | result-first | series',
+      variants: { a: 'TODO: main concept (also frame 0 of the film)', b: 'TODO: alternative for Test & Compare' },
+      method: 'references/cover-thumbnail-method.md'
+    },
+    concept: {
+      archetype: 'TODO: manifesto-typography | kinetic-typography | silhouette-dance | spatial-flight | product-hero | before-after | one-day | user-story',
+      reference: 'TODO: name a real ad or film (e.g. Apple iPod Silhouette, Apple Vision Pro launch film)',
+      device: 'TODO: the one mechanism that recurs through the whole film',
+      tempo: bpm || null,
+      musicStyle: 'TODO: e.g. solo-piano-waltz | trap-house-808 | funk-house | cinematic-ambient-no-drums',
+      typeStyle: 'TODO: e.g. serif-STSong | heavy-grotesque | rounded | ultralight',
+      palette: [],
+      camera: 'TODO',
+      structure: 'TODO: the beats of the film in one line',
+      method: 'references/ad-concept-library.md'
+    },
     storyboard: [],
     build: { scene: 'scenes/main.html', motionBlurSubframes: 3, shutter: 0.5 },
     gotchas: [
@@ -320,11 +365,18 @@ function commandInit(root, flags) {
     brief.audio.note = `Beat grid from music: ${grid.bpm} BPM, first downbeat ${grid.firstDownbeat}s${grid.drop ? `, drop at ${grid.drop.time}s` : ''}. Set audio.music.inPoint so video t=0 lands on a downbeat.`;
   }
   const gridForSkeleton = grid ? null : bpm;
-  brief.storyboard = storyboardSkeleton(style, canvas, gridForSkeleton);
+  brief.storyboard = storyboardSkeleton(style, canvas, gridForSkeleton, { cover: Boolean(brief.cover), title: brief.title, coverBpm: bpm });
   if (grid) {
     // Snap skeleton cuts to real downbeats (or beats when bars are scarce).
     const frame = 1 / canvas.fps;
-    const inside = (list) => list.filter((time) => time > frame && time < canvas.duration - frame);
+    const coverShot = brief.storyboard[0] && brief.storyboard[0].cover ? brief.storyboard.shift() : null;
+    if (coverShot) {
+      // End the cover on the real beat nearest to two beats in, so the hook lands on the grid.
+      const snapped = nearest(grid.beats.filter((time) => time > frame), coverShot.end);
+      if (snapped != null) coverShot.end = round(snapped);
+    }
+    const floor = coverShot ? coverShot.end : 0;
+    const inside = (list) => list.filter((time) => time > floor + frame && time < canvas.duration - frame);
     let candidates = inside(grid.downbeats);
     if (candidates.length < brief.storyboard.length - 1) candidates = inside(grid.beats);
     const count = Math.min(brief.storyboard.length, candidates.length + 1);
@@ -333,8 +385,9 @@ function commandInit(root, flags) {
       const pick = candidates[Math.min(candidates.length - 1, Math.round((k * candidates.length) / count) - (k === count ? 1 : 0))];
       if (pick != null && (!cuts.length || pick > cuts[cuts.length - 1])) cuts.push(pick);
     }
-    const bounds = [0, ...cuts, canvas.duration];
+    const bounds = [floor, ...cuts, canvas.duration];
     brief.storyboard = brief.storyboard.slice(0, bounds.length - 1).map((shot, index) => ({ ...shot, start: round(bounds[index]), end: round(bounds[index + 1]) }));
+    if (coverShot) brief.storyboard.unshift(coverShot);
   }
   writeJson(briefFile, brief);
   const sceneFile = path.join(root, 'scenes', 'main.html');
@@ -461,6 +514,35 @@ function checkBrief(root, brief) {
       if (!(at >= start && at <= end)) add(errors, 'event-time', `${label} event at ${event && event.at} is outside the shot.`);
     }
   });
+  if (!brief.loop) {
+    // Frame 0 is the cover (references/cover-thumbnail-method.md): never open on black.
+    const cover = brief.cover;
+    if (!cover || typeof cover !== 'object') add(errors, 'cover-missing', 'Non-loop films open on a cover: add brief.cover {frame:0, holdSeconds, promise, archetype, variants} and make storyboard[0] the cover shot (see references/cover-thumbnail-method.md).');
+    else {
+      for (const field of ['promise', 'archetype']) {
+        const value = String(cover[field] || '').trim();
+        if (!value || /^todo\b/i.test(value)) add(errors, 'cover-unwritten', `cover.${field} is not written yet.`);
+      }
+      if (Number(cover.holdSeconds) > 0.7 + frame) add(warnings, 'cover-hold', `cover.holdSeconds ${cover.holdSeconds}s: hold the full cover for at most 0.7 s, then exit on the beat.`);
+      const first = shots[0];
+      if (first && !(first.cover === true || first.id === 's00')) add(warnings, 'cover-shot', `storyboard[0] (${first.id}) is not the cover shot; mark it cover:true or id s00.`);
+      if (first && Number(first.end) - Number(first.start) > 1.5 + frame) add(warnings, 'cover-length', `The cover shot lasts ${round(Number(first.end) - Number(first.start))}s; keep it ≤ 1.5 s so the hook arrives fast.`);
+      const text = cjkAwareLength(first && first.onScreenText);
+      if (text.cjk > 6 || text.words > 4) add(warnings, 'cover-text', `Cover text is ${text.cjk} CJK / ${text.words} words; keep ≤ 6 CJK or ≤ 4 words.`);
+    }
+  }
+  {
+    // One film, one concept (references/ad-concept-library.md). Older briefs without a concept only warn.
+    const concept = brief.concept;
+    if (!concept || typeof concept !== 'object') add(warnings, 'concept-missing', 'No brief.concept: name the archetype, a real reference ad, the recurring device, music style and type style (references/ad-concept-library.md).');
+    else {
+      for (const field of ['archetype', 'reference', 'device', 'musicStyle', 'typeStyle', 'structure']) {
+        const value = String(concept[field] || '').trim();
+        if (!value || /^todo\b/i.test(value)) add(errors, 'concept-unwritten', `concept.${field} is not written yet.`);
+      }
+      if (!Array.isArray(concept.palette) || concept.palette.length < 2) add(warnings, 'concept-palette', 'concept.palette should list at least two colours.');
+    }
+  }
   if (shots.length && Math.abs(cursor - duration) > frame + 1e-6) add(errors, 'storyboard-duration', `Storyboard ends at ${round(cursor)}s but canvas.duration is ${duration}s.`);
   const audio = brief.audio || {};
   if (audio.music && audio.music.path) {
@@ -545,6 +627,7 @@ async function commandProbe(root, flags) {
   const limit = Number(flags.max || 32);
   if (times.length > limit) times = times.filter((_, index) => index % Math.ceil(times.length / limit) === 0);
   if (brief.loop) times = [...new Set([0, ...times, duration])].sort((a, b) => a - b);
+  else if (!times.includes(0)) times = [0, ...times];
   const outDir = path.join(root, 'reports', 'motion-probe');
   fs.rmSync(outDir, { recursive: true, force: true });
   const scene = projectPath(root, brief.build.scene, 'build.scene', true);
@@ -580,8 +663,19 @@ async function commandProbe(root, flags) {
     runFfmpeg(['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listFile,
       '-vf', `scale=480:-2,tile=${columns}x${rows}:padding=6:color=0x202020`, '-frames:v', '1', sheet], root);
   } catch (_) { /* contact sheet is a convenience */ }
+  let cover = null;
+  if (!brief.loop) {
+    const still = capture.stills.find((item) => item.time === 0);
+    const frame0 = still ? lumaStats(path.resolve(root, still.file)) : null;
+    cover = {
+      frame0,
+      notBlack: Boolean(frame0 && frame0.mean >= COVER_LIMITS.blackMean),
+      contrastOk: Boolean(frame0 && frame0.std >= COVER_LIMITS.flatStd),
+      rule: `frame 0 is the cover: mean luma ≥ ${COVER_LIMITS.blackMean}, std ≥ ${COVER_LIMITS.flatStd} (warning)`
+    };
+  }
   const report = {
-    ok: Boolean(capture.determinism ? capture.determinism.deterministic : true) && (!loop || loop.seamless),
+    ok: Boolean(capture.determinism ? capture.determinism.deterministic : true) && (!loop || loop.seamless) && (!cover || cover.notBlack),
     probedAt: new Date().toISOString(),
     sceneSha256: sha256File(scene),
     briefSha256: sha256File(path.join(root, 'motion-brief.json')),
@@ -589,6 +683,7 @@ async function commandProbe(root, flags) {
     stills: capture.stills.map((item) => ({ time: item.time, file: item.file })),
     determinism: capture.determinism,
     loop,
+    cover,
     contactSheet: fs.existsSync(sheet) ? path.relative(root, sheet) : null,
     review: 'Open the contact sheet and every cut frame. Fix anything cluttered, overlapping, off-grid or hard to read before rendering.'
   };
@@ -700,7 +795,8 @@ async function commandRender(root, flags) {
     const blockers = [];
     if (!probe) blockers.push('Run qcut motion probe before the final render.');
     else {
-      if (!probe.ok) blockers.push('The last probe failed (non-deterministic frames or loop seam). Fix and re-probe.');
+      if (probe.cover && !probe.cover.notBlack) blockers.push('Frame 0 is black/blank. Make storyboard[0] the cover (references/cover-thumbnail-method.md), then re-probe.');
+      else if (!probe.ok) blockers.push('The last probe failed (non-deterministic frames or loop seam). Fix and re-probe.');
       if (probe.sceneSha256 !== sha256File(scene)) blockers.push('Scene changed since the last probe. Re-run qcut motion probe.');
     }
     if (check.status === 'awaiting-storyboard-approval') blockers.push('approval.mode is ask and the storyboard is not approved. Show the storyboard on the beat grid, then set approval.storyboardApproved=true.');
@@ -746,6 +842,112 @@ async function commandRender(root, flags) {
   return report;
 }
 
+// ---- batch diversity: films made together must be different films ---------------------------------
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function chroma([r, g, b]) { return Math.max(r, g, b) - Math.min(r, g, b); }
+function paletteOverlap(a, b) {
+  const pa = (a || []).map(hexToRgb).filter((c) => c && chroma(c) > 40);
+  const pb = (b || []).map(hexToRgb).filter((c) => c && chroma(c) > 40);
+  if (!pa.length || !pb.length) return 0;
+  const near = (x, y) => Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 60;
+  const hits = pa.filter((x) => pb.some((y) => near(x, y))).length;
+  return hits / Math.min(pa.length, pb.length);
+}
+const norm = (v) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+function diversityReport(entries) {
+  const errors = [];
+  const warnings = [];
+  const add = (list, code, message, extra = {}) => list.push({ code, message, ...extra });
+  entries.forEach((e) => {
+    const c = e.concept;
+    if (!c) add(errors, 'concept-missing', `${e.name}: no brief.concept.`);
+    else if (!norm(c.reference) || /^todo/.test(norm(c.reference))) add(errors, 'reference-missing', `${e.name}: concept.reference must name a real ad or film.`);
+  });
+  for (let i = 0; i < entries.length; i += 1) {
+    for (let j = i + 1; j < entries.length; j += 1) {
+      const a = entries[i], b = entries[j];
+      if (!a.concept || !b.concept) continue;
+      const pair = `${a.name} × ${b.name}`;
+      if (norm(a.concept.archetype) === norm(b.concept.archetype)) add(errors, 'same-archetype', `${pair}: both use archetype "${a.concept.archetype}".`);
+      if (norm(a.concept.musicStyle) === norm(b.concept.musicStyle)) add(errors, 'same-music', `${pair}: both use music style "${a.concept.musicStyle}".`);
+      if (norm(a.concept.structure) === norm(b.concept.structure)) add(errors, 'same-structure', `${pair}: identical structure.`);
+      if (norm(a.concept.reference) === norm(b.concept.reference)) add(errors, 'same-reference', `${pair}: both cite "${a.concept.reference}".`);
+      if (norm(a.concept.typeStyle) === norm(b.concept.typeStyle)) add(warnings, 'same-type', `${pair}: same type style "${a.concept.typeStyle}".`);
+      if (norm(a.concept.camera) && norm(a.concept.camera) === norm(b.concept.camera)) add(warnings, 'same-camera', `${pair}: identical camera language.`);
+      const ta = Number(a.concept.tempo), tb = Number(b.concept.tempo);
+      if (ta > 0 && tb > 0 && Math.abs(ta - tb) <= 8) add(warnings, 'close-tempo', `${pair}: tempos ${ta} and ${tb} BPM are within 8.`);
+      const ov = paletteOverlap(a.concept.palette, b.concept.palette);
+      if (ov >= 0.5) add(warnings, 'similar-palette', `${pair}: ${Math.round(ov * 100)}% of the saturated colours overlap.`);
+      const da = Number(a.concept.duration), db = Number(b.concept.duration);
+      if (da > 0 && db > 0 && Math.abs(da - db) < 1) add(warnings, 'same-duration', `${pair}: same duration (${da}s); vary the length.`);
+    }
+  }
+  return { ok: errors.length === 0, films: entries.map((e) => ({ name: e.name, archetype: e.concept && e.concept.archetype, reference: e.concept && e.concept.reference, music: e.concept && e.concept.musicStyle, type: e.concept && e.concept.typeStyle, tempo: e.concept && e.concept.tempo, duration: e.concept && e.concept.duration })), errors, warnings };
+}
+
+function commandDiversity(roots, flags) {
+  if (roots.length < 2) throw new UsageError('qcut motion diversity needs at least two project directories.');
+  const entries = roots.map((root) => {
+    const file = path.join(root, 'motion-brief.json');
+    if (!fs.existsSync(file)) throw new Error(`motion-brief.json not found in ${root}`);
+    const brief = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return { name: path.basename(root), concept: brief.concept };
+  });
+  const report = diversityReport(entries);
+  if (flags.out) writeJson(path.resolve(String(flags.out)), { checkedAt: new Date().toISOString(), ...report });
+  return report;
+}
+
+async function commandCover(root, flags) {
+  const brief = readBrief(root);
+  if (brief.loop) throw new UsageError('Loops have no cover shot; export a thumbnail with qcut cover export instead.');
+  const scene = projectPath(root, brief.build.scene, 'build.scene', true);
+  const configured = brief.cover && brief.cover.variants ? Object.keys(brief.cover.variants) : [];
+  const variants = flags.variants ? String(flags.variants).split(',').map((v) => v.trim()).filter(Boolean) : (configured.length ? configured : ['a']);
+  const scale = Number(flags.scale || 2);
+  const { width, height } = brief.canvas;
+  const outDir = projectPath(root, 'renders/cover', 'cover output');
+  fs.mkdirSync(outDir, { recursive: true });
+  const results = [];
+  for (const variant of variants) {
+    if (!/^[\w-]{1,24}$/.test(variant)) throw new UsageError(`Invalid variant id: ${variant}`);
+    const stillDir = path.join(root, 'reports', 'motion-cover', variant);
+    fs.rmSync(stillDir, { recursive: true, force: true });
+    const capture = await captureStills({ projectRoot: root, source: scene, width, height, times: [0], outDir: stillDir, scale, determinism: false, query: `cover=${encodeURIComponent(variant)}` });
+    const master = path.join(outDir, `cover-${variant}@${scale}x.png`);
+    fs.copyFileSync(path.resolve(root, capture.stills[0].file), master);
+    const thumbs = exportThumbnails(master, outDir, `cover-${variant}`);
+    const check = checkCover(thumbs.jpg);
+    results.push({
+      variant,
+      concept: brief.cover && brief.cover.variants ? brief.cover.variants[variant] || null : null,
+      master: path.relative(root, master),
+      jpg: path.relative(root, thumbs.jpg),
+      previews: thumbs.previews.map((file) => path.relative(root, file)),
+      frame0: check.frame0,
+      bytes: fs.statSync(thumbs.jpg).size,
+      errors: check.errors,
+      warnings: check.warnings
+    });
+  }
+  const report = {
+    ok: results.every((item) => item.errors.length === 0),
+    renderedAt: new Date().toISOString(),
+    sceneSha256: sha256File(scene),
+    frameZeroVariant: variants[0],
+    variants: results,
+    review: 'Compare the 168/360 previews side by side; the main variant is frame 0 of the film. Upload 2–3 variants to YouTube Test & Compare (judged on watch-time share).'
+  };
+  writeJson(path.join(root, 'reports', 'motion-cover.json'), report);
+  return report;
+}
+
 function usage() {
   return `Usage:
   qcut motion styles [--json]
@@ -755,6 +957,8 @@ function usage() {
   qcut motion scene  <project> [--force]      regenerate the starter scene from the storyboard
   qcut motion check  <project> [--json]
   qcut motion probe  <project> [--times 0,1.5,3] [--max 32] [--json]
+  qcut motion diversity <project> <project> [...] [--out report.json] [--json]   films made together must be different concepts
+  qcut motion cover  <project> [--variants a,b,c] [--scale 2] [--json]   frame-0 cover → thumbnails
   qcut motion render <project> [--profile draft|final] [--force] [--json]
 `;
 }
@@ -767,7 +971,12 @@ async function cli(argv = process.argv.slice(2)) {
     process.stdout.write(flags.json ? `${JSON.stringify(list, null, 2)}\n` : `${list.map((item) => `${item.id}\t${item.title}`).join('\n')}\n`);
     return 0;
   }
-  if (!['init', 'scene', 'check', 'probe', 'render'].includes(command) || !project) throw new UsageError(usage());
+  if (command === 'diversity') {
+    const report = commandDiversity(positional.slice(1).map((p) => path.resolve(p)), flags);
+    process.stdout.write(flags.json ? `${JSON.stringify(report, null, 2)}\n` : `diversity: ${report.ok ? 'ok' : 'blocked'}\n${report.errors.map((e) => `  ✗ ${e.message}`).join('\n')}${report.warnings.length ? '\n' + report.warnings.map((e) => `  ! ${e.message}`).join('\n') : ''}\n`);
+    return report.ok ? 0 : 1;
+  }
+  if (!['init', 'scene', 'check', 'probe', 'cover', 'render'].includes(command) || !project) throw new UsageError(usage());
   const root = path.resolve(project);
   if (command !== 'init' && !fs.existsSync(root)) throw new Error('Project directory not found.');
   let result;
@@ -775,13 +984,14 @@ async function cli(argv = process.argv.slice(2)) {
   else if (command === 'scene') result = commandScene(root, flags);
   else if (command === 'check') result = commandCheck(root);
   else if (command === 'probe') result = await commandProbe(root, flags);
+  else if (command === 'cover') result = await commandCover(root, flags);
   else result = await commandRender(root, flags);
   if (flags.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   else process.stdout.write(`${command}: ${result.ok ? 'ok' : 'blocked'}${result.status ? ` (${result.status})` : ''}\n${(result.errors || []).map((item) => `  ✗ ${item.message || item}`).join('\n')}\n`);
   return result.ok ? 0 : 1;
 }
 
-module.exports = { STYLES, checkBrief, lintScene, storyboardSkeleton };
+module.exports = { STYLES, checkBrief, lintScene, storyboardSkeleton, coverSeconds, diversityReport };
 
 if (require.main === module) {
   cli().then((code) => { process.exitCode = code; }).catch((error) => {

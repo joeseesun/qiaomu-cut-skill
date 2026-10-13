@@ -1,18 +1,18 @@
 {
   "schema_version": "2.0.0-qiaomu-lite",
-  "generated_at": "2026-09-28",
+  "generated_at": "2026-10-13",
   "package": {
     "name": "qiaomu-cut",
-    "version": null,
-    "owner": null,
-    "maturity_tier": null,
-    "lifecycle_stage": null,
+    "version": "0.16.0",
+    "owner": "向阳乔木",
+    "maturity_tier": "production",
+    "lifecycle_stage": "public",
     "upstream_inspiration": null,
     "upstream_sync": {}
   },
   "intent": {
-    "description": "把一句话需求转成可复现、可验收视频工程的乔木智能剪辑导演。Use when the user asks to create, plan, edit, remix, explain, narrate, subtitle, animate, composite, or render a video—including one-line requests such as “制作一个科普视频：介绍 LLM 中的 RL”. Builds English-learning movie mixes, person profiles, explainers, code-drawn motion graphics (UI morph loops, showreels, kinetic-type promos, line-art/pixel/Three.js animation, lyric MVs), product launch videos, cinematic shorts, social clips, course/PPT videos, AI image/video/TTS/music-assisted stories, stock-footage stories, or multi-source montage. Routes across 33台词, ClipSeek/open media, local files, ListenHub, image generation, HTML/SVG/Canvas motion graphics with beat-grid storyboards and determinism probes, Manim, ffmpeg-full, captions, sound design, and release checks.\n",
-    "job_to_be_done": "把一句话需求转成可复现、可验收视频工程的乔木智能剪辑导演。Use when the user asks to create, plan, edit, remix, explain, narrate, subtitle, animate, composite, or render a video—including one-line requests such as “制作一个科普视频：介绍 LLM 中的 RL”. Builds English-learning movie mixes, person profiles, explainers, code-drawn motion graphics (UI morph loops, showreels, kinetic-type promos, line-art/pixel/Three.js animation, lyric MVs), product launch videos, cinematic shorts, social clips, course/PPT videos, AI image/video/TTS/music-assisted stories, stock-footage stories, or multi-source montage. Routes across 33台词, ClipSeek/open media, local files, ListenHub, image generation, HTML/SVG/Canvas motion graphics with beat-grid storyboards and determinism probes, Manim, ffmpeg-full, captions, sound design, and release checks.\n",
+    "description": "把一句话需求转成可复现、可验收视频工程的乔木智能剪辑导演。Use when the user asks to create, plan, edit, remix, explain, narrate, subtitle, animate, composite, or render a video—including one-line requests such as “制作一个科普视频：介绍 LLM 中的 RL”. Builds English-learning movie mixes, person profiles, explainers, code-drawn motion graphics (UI morph loops, showreels, kinetic-type promos, line-art/pixel/Three.js animation, lyric MVs), product launch videos, cinematic shorts, social clips, course/PPT videos, AI image/video/TTS/music-assisted stories, stock-footage stories, or multi-source montage. Routes across 33台词, ClipSeek/open media, local files, ListenHub, image generation, HTML/SVG/Canvas motion graphics with beat-grid storyboards and determinism probes, Manim, ffmpeg-full, captions, sound design, frame-0 video covers with YouTube thumbnails, and release checks.\n",
+    "job_to_be_done": "把一句话需求转成可复现、可验收视频工程的乔木智能剪辑导演。Use when the user asks to create, plan, edit, remix, explain, narrate, subtitle, animate, composite, or render a video—including one-line requests such as “制作一个科普视频：介绍 LLM 中的 RL”. Builds English-learning movie mixes, person profiles, explainers, code-drawn motion graphics (UI morph loops, showreels, kinetic-type promos, line-art/pixel/Three.js animation, lyric MVs), product launch videos, cinematic shorts, social clips, course/PPT videos, AI image/video/TTS/music-assisted stories, stock-footage stories, or multi-source montage. Routes across 33台词, ClipSeek/open media, local files, ListenHub, image generation, HTML/SVG/Canvas motion graphics with beat-grid storyboards and determinism probes, Manim, ffmpeg-full, captions, sound design, frame-0 video covers with YouTube thumbnails, and release checks.\n",
     "target_users": [
       "Qiaomu operator"
     ],
@@ -34,11 +34,13 @@
   },
   "resources": {
     "references": [
+      "references/ad-concept-library.md",
       "references/aesthetic-preferences.md",
       "references/brand-card-templates.md",
       "references/chinese-font-themes.md",
       "references/cinematic-techniques.md",
       "references/code-motion-direction.md",
+      "references/cover-thumbnail-method.md",
       "references/english-mix-fast-path.md",
       "references/explainer-autopilot.md",
       "references/feedback-evolution.md",
@@ -70,6 +72,7 @@
       "evals/trigger_cases.json"
     ],
     "reports": [
+      "reports/creation-handoff.md",
       "reports/listenhub-integration-evidence.md",
       "reports/output_quality_scorecard.md",
       "reports/prior-art-research.md",
@@ -78,8 +81,13 @@
     ]
   },
   "portability": {
-    "canonical_format": null,
-    "adapter_targets": [],
+    "canonical_format": "agent-skills",
+    "adapter_targets": [
+      "openai",
+      "claude",
+      "generic",
+      "agent-skills-compatible"
+    ],
     "activation": {},
     "execution": {},
     "trust": {},

@@ -1,0 +1,27 @@
+{
+  "name": "qiaomu-cut",
+  "version": "0.16.0",
+  "owner": "向阳乔木",
+  "updated_at": "2026-10-13",
+  "status": "active",
+  "maturity_tier": "production",
+  "lifecycle_stage": "public",
+  "target_platforms": [
+    "claude",
+    "openai",
+    "generic",
+    "agent-skills-compatible"
+  ],
+  "permissions": {
+    "network": "media sources and paid providers only after confirmation",
+    "file_write": "user-approved output directory",
+    "subprocess": "node, ffmpeg, Chrome, optional Python/Manim"
+  },
+  "release_gates": [
+    "package_validation",
+    "trigger_eval",
+    "skill_ir_export",
+    "vendor_snapshot_verify",
+    "npm_release_check"
+  ]
+}
