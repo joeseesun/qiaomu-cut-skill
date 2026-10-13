@@ -1,6 +1,13 @@
 {
   "ok": true,
-  "total": 24,
+  "total": 29,
+  "summary": {
+    "total": 29,
+    "passed": 29,
+    "false_positive": 0,
+    "false_negative": 0,
+    "pass_rate": 1.0
+  },
   "failures": [],
   "results": [
     {
@@ -84,6 +91,16 @@
       "got": true
     },
     {
+      "id": "video_cover_opening",
+      "expected": true,
+      "got": true
+    },
+    {
+      "id": "batch_promos_distinct",
+      "expected": true,
+      "got": true
+    },
+    {
       "id": "only_article",
       "expected": false,
       "got": false
@@ -120,6 +137,21 @@
     },
     {
       "id": "web_page_animation",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "standalone_article_cover",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "mechanism_figure_only",
+      "expected": false,
+      "got": false
+    },
+    {
+      "id": "podcast_audio_only",
       "expected": false,
       "got": false
     }

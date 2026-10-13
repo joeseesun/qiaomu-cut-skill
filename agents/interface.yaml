@@ -1,5 +1,5 @@
 name: qiaomu-cut
-version: 0.13.0
+version: 0.16.0
 mode: governed
 summary: 一句话生成专业视频的乔木智能剪辑导演
 owner:
@@ -285,3 +285,11 @@ release_gate:
     - paid ListenHub provider generation tests
     - provider data-retention, training-use, regional-processing, and downstream-deletion evidence
     - clean-host ListenHub/Coli install verification outside the development Mac
+
+interface:
+  display_name: "Qiaomu Cut"
+  short_description: "一句话生成可复现、可验收的视频工程"
+  default_prompt: "Use $qiaomu-cut to turn my one-line brief into a reproducible, verified video project: plan, source or generate media, edit, caption, mix and render with release checks."
+compatibility:
+  canonical_format: "agent-skills"
+  adapter_targets: ["openai", "claude", "generic", "agent-skills-compatible"]

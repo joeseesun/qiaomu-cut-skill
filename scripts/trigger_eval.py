@@ -41,7 +41,7 @@ def main() -> int:
         if not got:
             failures.append(case["id"])
 
-    for case in cases.get("should_not_trigger", []):
+    for case in cases.get("should_not_trigger", []) + cases.get("near_neighbor", []):
         got = should_trigger(case["input"])
         results.append({"id": case["id"], "expected": False, "got": got})
         if got:
@@ -50,6 +50,13 @@ def main() -> int:
     report = {
         "ok": not failures,
         "total": len(results),
+        "summary": {
+            "total": len(results),
+            "passed": len(results) - len(failures),
+            "false_positive": sum(1 for r in results if r["got"] and not r["expected"]),
+            "false_negative": sum(1 for r in results if r["expected"] and not r["got"]),
+            "pass_rate": round((len(results) - len(failures)) / len(results), 3) if results else 0.0,
+        },
         "failures": failures,
         "results": results,
     }

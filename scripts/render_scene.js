@@ -265,7 +265,9 @@ async function openScenePage(browser, options) {
     }
     await route.abort('blockedbyclient');
   });
-  await page.goto(pathToFileURL(source).href, { waitUntil: 'load' });
+  const url = pathToFileURL(source);
+  if (options.query) url.search = String(options.query).replace(/^\?/, '');
+  await page.goto(url.href, { waitUntil: 'load' });
   await page.evaluate(() => document.fonts && document.fonts.ready);
   return { context, page };
 }
